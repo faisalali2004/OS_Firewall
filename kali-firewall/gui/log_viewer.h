@@ -1,4 +1,5 @@
 #pragma once
+#include "logger.h"
 #include <QWidget>
 
 class Logger;
@@ -29,9 +30,4 @@ private:
     QLabel* pageLabel;
     int currentPage;
     int pageSize;
-};
-
-    void updateTable(const std::vector<LogEntry>& logs);
-    void updatePagination(int totalLogs);
-    void showError(const QString& message);
 };

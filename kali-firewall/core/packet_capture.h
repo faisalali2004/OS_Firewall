@@ -3,8 +3,9 @@
 #include <mutex>
 #include <atomic>
 #include <vector>
-#include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
+#include <netinet/in.h>   // For ntohl, struct in_addr, etc.
+#include <arpa/inet.h>    // For ntohl, ntohs, etc.
 
 using PacketHandler = int(*)(struct nfq_q_handle*, struct nfgenmsg*, struct nfq_data*);
 

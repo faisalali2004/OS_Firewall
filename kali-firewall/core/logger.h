@@ -33,11 +33,3 @@ private:
     bool initialized;
     std::mutex mtx;
 };
-
-    bool createTables();
-    bool executeSQL(const std::string& sql);
-    std::vector<LogEntry> fetchLogs(const std::string& sql);
-};
-
-    // Helper function to format timestamp
-    static std::string currentTimestamp();  

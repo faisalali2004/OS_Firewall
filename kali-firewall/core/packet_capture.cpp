@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <atomic>
 #include <csignal>
+#include <netinet/in.h>   // For ntohl, struct in_addr, etc.
+#include <arpa/inet.h>    // For ntohl, ntohs, etc.
 
 namespace {
 constexpr size_t DEFAULT_BUF_SIZE = 0x10000; // 64KB
