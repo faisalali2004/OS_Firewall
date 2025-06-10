@@ -1,0 +1,252 @@
+Kali Linux Firewall Project - Comprehensive Technical Report
+===========================================================
+
+1. Project Overview
+-------------------
+This project is a modular, kernel-integrated firewall for Kali Linux, featuring a Qt-based GUI. It provides live packet inspection, deep packet inspection (DPI), rule-based filtering, real-time logging, process-level monitoring, and traffic shaping. The design is extensible, user-friendly, and suitable for advanced users and security professionals.
+
+2. High-Level Architecture
+--------------------------
+The firewall is divided into several logical modules:
+
+- **Core:** Handles packet capture, rule evaluation, DPI, logging, and traffic shaping.
+- **Process Monitor:** Maps network connections to running processes and users.
+- **GUI:** Qt-based frontend for user interaction and visualization.
+- **Scripts:** Automate setup, dependency installation, and system integration.
+- **Config/Logs:** Store firewall rules and event logs.
+
+3. Module Breakdown
+-------------------
+
+### 3.1 Core Modules
+
+#### a. Packet Capture (`core/packet_capture.h/.cpp`)
+**What:**  
+Captures all network packets using Netfilter Queue (NFQUEUE) and passes them to the rule engine and DPI engine.
+
+**Why:**  
+Allows the firewall to inspect, filter, and log every packet entering or leaving the system at the OS level.
+
+**How:**  
+- Uses `libnetfilter_queue` to intercept packets.
+- Runs a capture loop in a separate thread.
+- For each packet, invokes user-defined handlers for further processing.
+
+#### b. Rule Engine (`core/rule_engine.h/.cpp`)
+**What:**  
+Loads, stores, and evaluates firewall rules defined in JSON format.
+
+**Why:**  
+Enables flexible, user-defined filtering based on IP, port, protocol, and action (ALLOW, DROP, LOG, SHAPE).
+
+**How:**  
+- Loads rules from `config/default_rules.json`.
+- For each packet, checks if it matches any rule and returns the corresponding action.
+- Supports easy rule editing via the GUI.
+
+#### c. DPI Engine (`core/dpi_engine.h/.cpp`)
+**What:**  
+Performs Deep Packet Inspection to identify protocols (HTTP, DNS, TLS, SSH) and block or log based on payload content.
+
+**Why:**  
+Allows detection and filtering of specific application protocols, even if they use non-standard ports.
+
+**How:**  
+- Uses regex patterns to match protocol signatures in packet payloads.
+- Can be extended with new signatures via the GUI.
+
+#### d. Logger (`core/logger.h/.cpp`)
+**What:**  
+Logs firewall events (packet actions, matches, etc.) to a SQLite database.
+
+**Why:**  
+Provides persistent, queryable logs for auditing, debugging, and visualization in the GUI.
+
+**How:**  
+- Writes events to `logs/firewall.db`.
+- Supports concurrent access with mutexes.
+- LogViewer GUI reads from this database.
+
+#### e. Traffic Shaper (`core/traffic_shaper.h/.cpp`)
+**What:**  
+Controls bandwidth on network interfaces using Linux `tc` (traffic control).
+
+**Why:**  
+Allows administrators to limit or shape traffic for specific interfaces, improving QoS or enforcing policies.
+
+**How:**  
+- Executes `tc` commands to set or clear bandwidth limits.
+- Controlled via the Traffic Shaper GUI.
+
+### 3.2 Process Monitor
+
+#### ProcTracker (`process_monitor/proc_tracker.h/.cpp`)
+**What:**  
+Maps active TCP connections to Linux processes and users.
+
+**Why:**  
+Enables process-level filtering, logging, and visualization of which applications are using the network.
+
+**How:**  
+- Parses `/proc/net/tcp` and `/proc/<pid>/fd` to associate sockets with processes.
+- Used by the Dashboard GUI to display active connections.
+
+### 3.3 GUI Modules
+
+#### a. MainWindow (`gui/mainwindow.h/.cpp`)
+**What:**  
+The main Qt window, organizing all functional tabs (Dashboard, Rules, Logs, Traffic Shaper, DPI).
+
+**Why:**  
+Provides a user-friendly, centralized interface for managing and monitoring the firewall.
+
+**How:**  
+- Uses `QTabWidget` to organize submodules.
+- Each tab is a separate QWidget for modularity.
+
+#### b. Dashboard (`gui/dashboard.h/.cpp`)
+**What:**  
+Displays real-time stats: packet rate, DPI matches, and active connections.
+
+**Why:**  
+Gives users an overview of system network activity and firewall performance.
+
+**How:**  
+- Periodically refreshes stats and connection tables.
+- Integrates with ProcTracker and core stats.
+
+#### c. Rule Editor (`gui/rule_editor.h/.cpp`)
+**What:**  
+Allows users to view, add, edit, and delete firewall rules in a table format.
+
+**Why:**  
+Simplifies rule management and ensures changes are reflected in the firewall’s behavior.
+
+**How:**  
+- Loads and saves rules to `config/default_rules.json`.
+- Edits rules in a `QTableWidget`.
+
+#### d. Log Viewer (`gui/log_viewer.h/.cpp`)
+**What:**  
+Displays real-time firewall logs from the SQLite database.
+
+**Why:**  
+Enables users to audit, filter, and analyze firewall events.
+
+**How:**  
+- Reads from `logs/firewall.db`.
+- Refreshes periodically to show new events.
+
+#### e. Traffic Shaper UI (`gui/traffic_shaper_ui.h/.cpp`)
+**What:**  
+GUI for applying or clearing bandwidth limits on interfaces.
+
+**Why:**  
+Makes traffic shaping accessible to users without command-line knowledge.
+
+**How:**  
+- Takes interface and rate input.
+- Calls TrafficShaper backend.
+
+#### f. DPI Manager (`gui/dpi_manager.h/.cpp`)
+**What:**  
+GUI for managing DPI signatures (protocol patterns).
+
+**Why:**  
+Allows users to add or remove protocol detection rules for DPI.
+
+**How:**  
+- Edits a table of signatures.
+- Can be extended to save/load signatures.
+
+### 3.4 Scripts
+
+#### a. `install_firewall.sh`
+**What:**  
+Automated installer for dependencies, build, and setup.
+
+**Why:**  
+Simplifies deployment and ensures all requirements are met.
+
+**How:**  
+- Installs packages, builds with CMake, sets up iptables.
+
+#### b. `setup_iptables.sh` / `reset_iptables.sh`
+**What:**  
+Sets up or resets iptables rules for NFQUEUE.
+
+**Why:**  
+Redirects packets to the firewall for inspection.
+
+**How:**  
+- Adds/removes NFQUEUE rules using `iptables`.
+
+#### c. `traffic_control.sh`
+**What:**  
+Applies or clears traffic shaping on interfaces.
+
+**Why:**  
+Provides a CLI for bandwidth management.
+
+**How:**  
+- Uses `tc` commands.
+
+#### d. `uninstall_firewall.sh`
+**What:**  
+Removes firewall build, binaries, and iptables rules.
+
+**Why:**  
+Allows clean uninstallation.
+
+**How:**  
+- Deletes build artifacts and resets iptables.
+
+### 3.5 Config and Logs
+
+- **config/default_rules.json:** Stores firewall rules in JSON format.
+- **logs/firewall.db:** SQLite database for event logs.
+
+4. How It All Works Together
+----------------------------
+- **Startup:**  
+  The user runs `install_firewall.sh` to install dependencies, build the project, and set up iptables.
+- **Packet Flow:**  
+  iptables redirects packets to NFQUEUE. `core/packet_capture` receives them, passes them to the rule engine and DPI engine, and logs the result.
+- **Rule Evaluation:**  
+  The rule engine checks each packet against loaded rules and determines the action (ALLOW, DROP, LOG, SHAPE).
+- **DPI:**  
+  The DPI engine inspects packet payloads for protocol signatures.
+- **Logging:**  
+  All significant events are logged to the SQLite database.
+- **Process Monitoring:**  
+  The process monitor maps connections to processes for display in the GUI.
+- **GUI:**  
+  The user interacts with the firewall via the Qt GUI, managing rules, viewing logs, shaping traffic, and monitoring activity.
+
+5. Why This Design?
+-------------------
+- **Modularity:**  
+  Each function is in its own module for maintainability and extensibility.
+- **Kernel Integration:**  
+  Using Netfilter/NFQUEUE ensures all packets are inspected at the OS level.
+- **User-Friendly:**  
+  The Qt GUI makes advanced firewall management accessible.
+- **Extensible:**  
+  DPI signatures and rules can be extended without code changes.
+- **Security:**  
+  Real-time logging and process mapping provide deep visibility and control.
+
+6. How to Extend or Customize
+-----------------------------
+- **Add new DPI signatures** via the DPI Manager GUI.
+- **Edit rules** in the Rule Editor tab or directly in the JSON config.
+- **Integrate plugins** for new protocol detection or actions.
+- **Automate tasks** with scripts or systemd services.
+
+7. Licensing
+------------
+- Licensed under GNU GPL v3.0: https://www.gnu.org/licenses/gpl-3.0.html
+
+8. Conclusion
+-------------
+This firewall project combines kernel-level packet control, deep inspection, process awareness, and a modern GUI to deliver a powerful, extensible, and user-friendly security solution for Kali Linux.
