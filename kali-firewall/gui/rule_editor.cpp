@@ -6,6 +6,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QMessageBox>
+#include <QNetworkInterface>
 
 RuleEditor::RuleEditor(QWidget* parent)
     : QWidget(parent),

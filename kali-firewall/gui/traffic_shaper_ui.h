@@ -5,6 +5,8 @@
 #include <QPushButton>
 #include <QComboBox>
 #include <QMessageBox>
+#include <QNetworkInterface>
+#include <QIntValidator>
 
 class TrafficShaperUI : public QWidget {
     Q_OBJECT
