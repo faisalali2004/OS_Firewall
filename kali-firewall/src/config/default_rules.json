@@ -1,0 +1,18 @@
+[
+    {
+        "src_ip": "0.0.0.0/0",
+        "dst_ip": "0.0.0.0/0",
+        "src_port": 0,
+        "dst_port": 80,
+        "protocol": "TCP",
+        "action": "ALLOW"
+    },
+    {
+        "src_ip": "0.0.0.0/0",
+        "dst_ip": "0.0.0.0/0",
+        "src_port": 0,
+        "dst_port": 22,
+        "protocol": "TCP",
+        "action": "DROP"
+    }
+]
