@@ -1,7 +1,8 @@
 #include "dashboard.h"
-#include <QApplication>
-#include <QDateTime>
 #include <QRandomGenerator>
+#include <QGroupBox>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 Dashboard::Dashboard(QWidget* parent)
     : QWidget(parent),
