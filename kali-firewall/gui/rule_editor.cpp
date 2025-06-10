@@ -1,4 +1,5 @@
 #include "rule_editor.h"
+#include <QJsonObject>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
