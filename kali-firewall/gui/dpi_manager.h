@@ -1,40 +1,59 @@
 #pragma once
 #include <QWidget>
-#include <QTableWidget>
-#include <QPushButton>
-#include <QLineEdit>
-#include <QLabel>
-#include <vector>
-#include <QString>
 
-struct GuiDPISignature {
-    QString name;
-    QString pattern;
-    QString result;
-};
+/**
+ * @brief DPImanager provides a GUI for managing DPI signatures and testing DPI detection.
+ *        Users can add/remove signatures, view all signatures, and test payloads (hex or ASCII).
+ *        Integrates with DPIEngine for real-time inspection and management.
+ */
+class DPIEngine;
+class QListWidget;
+class QLineEdit;
+class QComboBox;
+class QPushButton;
+class QLabel;
+class QTextEdit;
 
-class DPIManager : public QWidget {
+class DPImanager : public QWidget {
     Q_OBJECT
-
 public:
-    explicit DPIManager(QWidget* parent = nullptr);
-    ~DPIManager();
+    /**
+     * @brief Construct a new DPImanager widget.
+     * @param parent Parent widget.
+     */
+    explicit DPImanager(QWidget* parent = nullptr);
 
 private slots:
-    void addSignature();
-    void removeSelectedSignature();
+    /**
+     * @brief Add a new DPI signature from user input.
+     */
+    void onAddSignature();
+
+    /**
+     * @brief Remove the currently selected DPI signature.
+     */
+    void onRemoveSignature();
+
+    /**
+     * @brief Test DPI detection on the provided payload.
+     */
+    void onTestDPI();
+
+    /**
+     * @brief Refresh the displayed list of signatures.
+     */
+    void refreshSignatureList();
 
 private:
-    QTableWidget* table;
-    QLineEdit* nameEdit;
-    QLineEdit* patternEdit;
-    QLineEdit* resultEdit;
+    DPIEngine* dpiEngine;
+    QListWidget* sigList;
+    QLineEdit* sigNameEdit;
+    QLineEdit* sigRegexEdit;
+    QComboBox* sigResultBox;
+    QComboBox* caseInsensitiveBox;
     QPushButton* addBtn;
     QPushButton* removeBtn;
-    QLabel* statusLabel;
-
-    std::vector<GuiDPISignature> signatures;
-
-    void updateStatus(const QString& msg, bool error = false);
-    void populateTable();
+    QTextEdit* testPayloadEdit;
+    QPushButton* testBtn;
+    QLabel* testResultLabel;
 };

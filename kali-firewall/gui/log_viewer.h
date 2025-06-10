@@ -1,28 +1,37 @@
 #pragma once
 #include <QWidget>
-#include <QTableWidget>
-#include <QTimer>
-#include <QPushButton>
-#include <QLabel>
+
+class Logger;
+class QTableWidget;
+class QLineEdit;
+class QPushButton;
+class QLabel;
 
 class LogViewer : public QWidget {
     Q_OBJECT
-
 public:
-    explicit LogViewer(QWidget* parent = nullptr);
-    ~LogViewer();
+    explicit LogViewer(Logger* logger, QWidget* parent = nullptr);
 
 private slots:
     void refreshLogs();
-    void manualRefresh();
+    void onClearLogs();
+    void onPrevPage();
+    void onNextPage();
 
 private:
-    void loadLogs();
-    void updateStatus(const QString& msg, bool error = false);
-
+    Logger* logger;
     QTableWidget* table;
-    QTimer* timer;
+    QLineEdit* searchEdit;
     QPushButton* refreshBtn;
-    QLabel* statusLabel;
-    QString logPath;
+    QPushButton* clearBtn;
+    QPushButton* prevBtn;
+    QPushButton* nextBtn;
+    QLabel* pageLabel;
+    int currentPage;
+    int pageSize;
+};
+
+    void updateTable(const std::vector<LogEntry>& logs);
+    void updatePagination(int totalLogs);
+    void showError(const QString& message);
 };

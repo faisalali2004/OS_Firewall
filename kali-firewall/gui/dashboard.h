@@ -1,18 +1,20 @@
 #pragma once
+
 #include <QWidget>
 #include <QLabel>
-#include <QPushButton>
 #include <QProgressBar>
+#include <QPushButton>
 #include <QTimer>
-#include <QGroupBox>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 
+class Logger;
+
+/**
+ * @brief Dashboard widget showing firewall status, system stats, and navigation.
+ */
 class Dashboard : public QWidget {
     Q_OBJECT
-
 public:
-    explicit Dashboard(QWidget* parent = nullptr);
+    explicit Dashboard(Logger* logger = nullptr, QWidget* parent = nullptr);
     ~Dashboard();
 
 signals:
@@ -25,6 +27,11 @@ private slots:
     void updateStats();
 
 private:
+    void setupUI();
+    int getCpuUsage();
+    int getMemUsage();
+
+    Logger* logger;
     QLabel* statusLabel;
     QLabel* trafficLabel;
     QLabel* blockedLabel;
@@ -35,6 +42,4 @@ private:
     QPushButton* ruleBtn;
     QPushButton* shaperBtn;
     QPushButton* dpiBtn;
-
-    void setupUI();
 };

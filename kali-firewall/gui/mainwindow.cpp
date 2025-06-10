@@ -4,48 +4,72 @@
 #include "rule_editor.h"
 #include "traffic_shaper_ui.h"
 #include "dpi_manager.h"
-
+#include "logger.h"
+#include <QMessageBox>
+#include <QDebug>
 #include <QStackedWidget>
 #include <QToolBar>
 #include <QAction>
+#include <QToolButton>
 #include <QIcon>
-#include <QApplication>
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
+      logger(new Logger()),
       stackedWidget(new QStackedWidget(this)),
-      dashboard(new Dashboard(this)),
-      logViewer(new LogViewer(this)),
+      dashboard(new Dashboard(logger, this)),
+      logViewer(new LogViewer(logger, this)),
       ruleEditor(new RuleEditor(this)),
       trafficShaperUI(new TrafficShaperUI(this)),
-      dpiManager(new DPIManager(this)),
+      dpiManager(new DPImanager(this)),
       navToolBar(new QToolBar("Navigation", this)),
       dashboardAction(new QAction(QIcon::fromTheme("view-dashboard"), "Dashboard", this)),
       logAction(new QAction(QIcon::fromTheme("document-open"), "Logs", this)),
       ruleAction(new QAction(QIcon::fromTheme("edit"), "Rules", this)),
       shaperAction(new QAction(QIcon::fromTheme("network-wired"), "Traffic Shaper", this)),
-      dpiAction(new QAction(QIcon::fromTheme("security-high"), "DPI Manager", this))
+      dpiAction(new QAction(QIcon::fromTheme("security-high"), "DPI Manager", this)),
+      interactiveModeButton(new QToolButton(this)),
+      ruleEngine(new RuleEngine(this, "../config/default_rules.json"))
 {
     setWindowTitle("Kali Firewall");
     setMinimumSize(900, 600);
 
+    // --- Logger DB Initialization ---
+    if (!logger->initDB("../logs/firewall_log.db")) {
+        QMessageBox::critical(this, "Logger Error", "Failed to initialize log database. Logging will be disabled.");
+    }
+
     // Add widgets to stackedWidget
-    stackedWidget->addWidget(dashboard);      // index 0
-    stackedWidget->addWidget(logViewer);      // index 1
-    stackedWidget->addWidget(ruleEditor);     // index 2
-    stackedWidget->addWidget(trafficShaperUI);// index 3
-    stackedWidget->addWidget(dpiManager);     // index 4
+    stackedWidget->addWidget(dashboard);
+    stackedWidget->addWidget(logViewer);
+    stackedWidget->addWidget(ruleEditor);
+    stackedWidget->addWidget(trafficShaperUI);
+    stackedWidget->addWidget(dpiManager);
 
     setCentralWidget(stackedWidget);
 
     setupNavigation();
     setupConnections();
 
-    // Show dashboard by default
+    // --- INTERACTIVE FIREWALL POPUP INTEGRATION ---
+    connect(ruleEngine, &RuleEngine::userDecisionNeeded,
+            this, &MainWindow::onUserDecisionNeeded);
+    ruleEngine->setInteractiveMode(true); // Default ON
+
+    // --- INTERACTIVE MODE TOGGLE BUTTON ---
+    interactiveModeButton->setText("Interactive Mode");
+    interactiveModeButton->setCheckable(true);
+    interactiveModeButton->setChecked(true);
+    navToolBar->addWidget(interactiveModeButton);
+    connect(interactiveModeButton, &QToolButton::toggled,
+            this, &MainWindow::onInteractiveModeToggled);
+
     showDashboard();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    delete logger;
+}
 
 void MainWindow::setupNavigation() {
     navToolBar->addAction(dashboardAction);
@@ -89,4 +113,39 @@ void MainWindow::showTrafficShaper() {
 
 void MainWindow::showDPIManager() {
     stackedWidget->setCurrentWidget(dpiManager);
+}
+
+// --- INTERACTIVE FIREWALL POPUP SLOT ---
+void MainWindow::onUserDecisionNeeded(const PacketInfo& pkt) {
+    qDebug() << "Interactive popup triggered for packet:" << pkt.srcIp << pkt.dstIp << pkt.srcPort << pkt.dstPort;
+    QString msg = QString("A new connection was detected:\n\n"
+                          "Source IP: %1\n"
+                          "Destination IP: %2\n"
+                          "Source Port: %3\n"
+                          "Destination Port: %4\n\n"
+                          "Do you want to ALLOW this connection?")
+                          .arg(pkt.srcIp)
+                          .arg(pkt.dstIp)
+                          .arg(pkt.srcPort)
+                          .arg(pkt.dstPort);
+
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Firewall Decision", msg, QMessageBox::Yes | QMessageBox::No);
+
+    if (ruleEngine) {
+        if (reply == QMessageBox::Yes) {
+            ruleEngine->userDecisionReceived("allow");
+        } else {
+            ruleEngine->userDecisionReceived("block");
+        }
+    }
+}
+
+void MainWindow::onInteractiveModeToggled(bool checked) {
+    if (ruleEngine) {
+        ruleEngine->setInteractiveMode(checked);
+        QString msg = checked ? "Interactive mode enabled.\nYou will be prompted for unknown connections."
+                              : "Interactive mode disabled.\nUnknown connections will be blocked by default.";
+        QMessageBox::information(this, "Interactive Mode", msg);
+    }
 }

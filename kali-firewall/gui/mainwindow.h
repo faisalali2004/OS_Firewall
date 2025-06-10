@@ -1,15 +1,23 @@
 #pragma once
+
 #include <QMainWindow>
 #include <QStackedWidget>
 #include <QToolBar>
 #include <QAction>
+#include <QToolButton>
+#include "rule_engine.h" // For PacketInfo and RuleEngine
 
 class Dashboard;
 class LogViewer;
 class RuleEditor;
 class TrafficShaperUI;
-class DPIManager;
+class DPImanager; // Note: class name matches your implementation
+class Logger;
 
+/**
+ * @brief MainWindow is the central widget for the firewall GUI.
+ *        It manages navigation, logger integration, and interactive firewall popups.
+ */
 class MainWindow : public QMainWindow {
     Q_OBJECT
 
@@ -24,13 +32,23 @@ private slots:
     void showTrafficShaper();
     void showDPIManager();
 
+    // Interactive firewall popup slot
+    void onUserDecisionNeeded(const PacketInfo& pkt);
+
+    // Slot for interactive mode toggle
+    void onInteractiveModeToggled(bool checked);
+
 private:
+    void setupNavigation();
+    void setupConnections();
+
+    Logger* logger;
     QStackedWidget* stackedWidget;
     Dashboard* dashboard;
     LogViewer* logViewer;
     RuleEditor* ruleEditor;
     TrafficShaperUI* trafficShaperUI;
-    DPIManager* dpiManager;
+    DPImanager* dpiManager;
 
     QToolBar* navToolBar;
     QAction* dashboardAction;
@@ -39,6 +57,9 @@ private:
     QAction* shaperAction;
     QAction* dpiAction;
 
-    void setupNavigation();
-    void setupConnections();
+    // Interactive mode toggle button
+    QToolButton* interactiveModeButton;
+
+    // Pointer to your RuleEngine instance
+    RuleEngine* ruleEngine;
 };

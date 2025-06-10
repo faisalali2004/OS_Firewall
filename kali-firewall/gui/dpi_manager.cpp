@@ -1,113 +1,149 @@
 #include "dpi_manager.h"
+#include "dpi_engine.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QHeaderView>
+#include <QFormLayout>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QLabel>
+#include <QListWidget>
 #include <QMessageBox>
+#include <QByteArray>
+#include <QTextEdit>
 
-DPIManager::DPIManager(QWidget* parent)
+DPImanager::DPImanager(QWidget* parent)
     : QWidget(parent),
-      table(new QTableWidget(this)),
-      nameEdit(new QLineEdit(this)),
-      patternEdit(new QLineEdit(this)),
-      resultEdit(new QLineEdit(this)),
-      addBtn(new QPushButton("Add Signature", this)),
-      removeBtn(new QPushButton("Remove Selected", this)),
-      statusLabel(new QLabel(this))
+      dpiEngine(new DPIEngine())
 {
-    table->setColumnCount(3);
-    table->setHorizontalHeaderLabels({"Name", "Pattern", "Result"});
-    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    auto* mainLayout = new QVBoxLayout(this);
 
-    nameEdit->setPlaceholderText("Signature Name");
-    patternEdit->setPlaceholderText("Regex Pattern");
-    resultEdit->setPlaceholderText("Result Label");
+    // --- Signature List ---
+    auto* sigLabel = new QLabel("Current DPI Signatures:", this);
+    sigList = new QListWidget(this);
+    refreshSignatureList();
 
-    auto* inputLayout = new QHBoxLayout;
-    inputLayout->addWidget(nameEdit);
-    inputLayout->addWidget(patternEdit);
-    inputLayout->addWidget(resultEdit);
-    inputLayout->addWidget(addBtn);
+    // --- Add/Remove Signature Controls ---
+    auto* addLayout = new QFormLayout;
+    sigNameEdit = new QLineEdit(this);
+    sigRegexEdit = new QLineEdit(this);
+    sigResultBox = new QComboBox(this);
+    sigResultBox->addItems({"HTTP", "DNS", "TLS", "SSH", "FTP", "SMTP", "QUIC", "UNKNOWN"});
+    caseInsensitiveBox = new QComboBox(this);
+    caseInsensitiveBox->addItems({"No", "Yes"});
+    addBtn = new QPushButton("Add Signature", this);
+    removeBtn = new QPushButton("Remove Selected", this);
+
+    addLayout->addRow("Name:", sigNameEdit);
+    addLayout->addRow("Regex:", sigRegexEdit);
+    addLayout->addRow("Result:", sigResultBox);
+    addLayout->addRow("Case Insensitive:", caseInsensitiveBox);
 
     auto* btnLayout = new QHBoxLayout;
+    btnLayout->addWidget(addBtn);
     btnLayout->addWidget(removeBtn);
 
-    auto* mainLayout = new QVBoxLayout(this);
-    mainLayout->addWidget(table);
-    mainLayout->addLayout(inputLayout);
+    // --- Test DPI Section ---
+    auto* testLayout = new QFormLayout;
+    testPayloadEdit = new QTextEdit(this);
+    testPayloadEdit->setPlaceholderText("Enter hex or ASCII payload to test...");
+    testBtn = new QPushButton("Test DPI", this);
+    testResultLabel = new QLabel(this);
+
+    testLayout->addRow("Test Payload:", testPayloadEdit);
+    testLayout->addRow(testBtn);
+    testLayout->addRow("Result:", testResultLabel);
+
+    // --- Assemble Layout ---
+    mainLayout->addWidget(sigLabel);
+    mainLayout->addWidget(sigList);
+    mainLayout->addLayout(addLayout);
     mainLayout->addLayout(btnLayout);
-    mainLayout->addWidget(statusLabel);
+    mainLayout->addSpacing(10);
+    mainLayout->addLayout(testLayout);
+
+    // --- Connections ---
+    connect(addBtn, &QPushButton::clicked, this, &DPImanager::onAddSignature);
+    connect(removeBtn, &QPushButton::clicked, this, &DPImanager::onRemoveSignature);
+    connect(testBtn, &QPushButton::clicked, this, &DPImanager::onTestDPI);
 
     setLayout(mainLayout);
-
-    connect(addBtn, &QPushButton::clicked, this, &DPIManager::addSignature);
-    connect(removeBtn, &QPushButton::clicked, this, &DPIManager::removeSelectedSignature);
-
-    // Optionally, add some default signatures
-    signatures.push_back({"HTTP", R"(^GET |^POST |^HTTP/1\.)", "HTTP"});
-    signatures.push_back({"DNS", R"(^.{2}\x01\x00)", "DNS"});
-    signatures.push_back({"TLS", R"(^\x16\x03)", "TLS"});
-    signatures.push_back({"SSH", R"(^SSH-)", "SSH"});
-    populateTable();
-    updateStatus("Ready.");
 }
 
-DPIManager::~DPIManager() = default;
+void DPImanager::refreshSignatureList() {
+    sigList->clear();
+    for (const auto& name : dpiEngine->listSignatures()) {
+        sigList->addItem(QString::fromStdString(name));
+    }
+}
 
-void DPIManager::addSignature() {
-    QString name = nameEdit->text().trimmed();
-    QString pattern = patternEdit->text().trimmed();
-    QString result = resultEdit->text().trimmed();
+void DPImanager::onAddSignature() {
+    QString name = sigNameEdit->text().trimmed();
+    QString regex = sigRegexEdit->text().trimmed();
+    QString resultStr = sigResultBox->currentText();
+    bool caseInsensitive = (caseInsensitiveBox->currentIndex() == 1);
 
-    if (name.isEmpty() || pattern.isEmpty() || result.isEmpty()) {
-        updateStatus("All fields are required.", true);
+    if (name.isEmpty() || regex.isEmpty()) {
+        QMessageBox::warning(this, "Input Error", "Name and Regex must not be empty.");
         return;
     }
 
-    // Optionally, validate regex
-    QRegExp rx(pattern);
-    if (!rx.isValid()) {
-        updateStatus("Invalid regex pattern.", true);
+    DPIResult result = DPIResult::UNKNOWN;
+    if (resultStr == "HTTP") result = DPIResult::HTTP;
+    else if (resultStr == "DNS") result = DPIResult::DNS;
+    else if (resultStr == "TLS") result = DPIResult::TLS;
+    else if (resultStr == "SSH") result = DPIResult::SSH;
+    else if (resultStr == "FTP") result = DPIResult::FTP;
+    else if (resultStr == "SMTP") result = DPIResult::SMTP;
+    else if (resultStr == "QUIC") result = DPIResult::QUIC;
+
+    dpiEngine->addSignature(name.toStdString(), regex.toStdString(), result, caseInsensitive);
+    refreshSignatureList();
+    QMessageBox::information(this, "Signature Added", "Signature added successfully.");
+}
+
+void DPImanager::onRemoveSignature() {
+    auto* item = sigList->currentItem();
+    if (!item) {
+        QMessageBox::warning(this, "Remove Signature", "Select a signature to remove.");
+        return;
+    }
+    QString name = item->text();
+    dpiEngine->removeSignature(name.toStdString());
+    refreshSignatureList();
+    QMessageBox::information(this, "Signature Removed", "Signature removed successfully.");
+}
+
+void DPImanager::onTestDPI() {
+    QString input = testPayloadEdit->toPlainText().trimmed();
+    if (input.isEmpty()) {
+        testResultLabel->setText("Enter a payload to test.");
         return;
     }
 
-    signatures.push_back({name, pattern, result});
-    populateTable();
-    nameEdit->clear();
-    patternEdit->clear();
-    resultEdit->clear();
-    updateStatus("Signature added.");
-}
-
-void DPIManager::removeSelectedSignature() {
-    auto selected = table->selectionModel()->selectedRows();
-    if (selected.isEmpty()) {
-        updateStatus("No signature selected.", true);
-        return;
+    // Try to interpret as hex, else as ASCII
+    QByteArray payload;
+    bool isHex = input.contains(QRegularExpression("^[0-9a-fA-F\\s]+$"));
+    if (isHex) {
+        payload = QByteArray::fromHex(input.remove(' ').toLatin1());
+    } else {
+        payload = input.toUtf8();
     }
-    int row = selected.first().row();
-    if (row >= 0 && row < static_cast<int>(signatures.size())) {
-        signatures.erase(signatures.begin() + row);
-        populateTable();
-        updateStatus("Signature removed.");
-    }
-}
 
-void DPIManager::populateTable() {
-    table->setRowCount(0);
-    for (const auto& sig : signatures) {
-        int row = table->rowCount();
-        table->insertRow(row);
-        table->setItem(row, 0, new QTableWidgetItem(sig.name));
-        table->setItem(row, 1, new QTableWidgetItem(sig.pattern));
-        table->setItem(row, 2, new QTableWidgetItem(sig.result));
-    }
-}
+    std::string matched;
+    DPIResult res = dpiEngine->inspect(reinterpret_cast<const uint8_t*>(payload.constData()), payload.size(), matched);
 
-void DPIManager::updateStatus(const QString& msg, bool error) {
-    statusLabel->setText(msg);
-    QPalette pal = statusLabel->palette();
-    pal.setColor(QPalette::WindowText, error ? Qt::red : Qt::darkGreen);
-    statusLabel->setPalette(pal);
+    QString resStr;
+    switch (res) {
+        case DPIResult::HTTP: resStr = "HTTP"; break;
+        case DPIResult::DNS: resStr = "DNS"; break;
+        case DPIResult::TLS: resStr = "TLS"; break;
+        case DPIResult::SSH: resStr = "SSH"; break;
+        case DPIResult::FTP: resStr = "FTP"; break;
+        case DPIResult::SMTP: resStr = "SMTP"; break;
+        case DPIResult::QUIC: resStr = "QUIC"; break;
+        case DPIResult::NONE: resStr = "NONE"; break;
+        default: resStr = "UNKNOWN"; break;
+    }
+    testResultLabel->setText("Result: " + resStr + "\nMatched: " + QString::fromStdString(matched));
 }

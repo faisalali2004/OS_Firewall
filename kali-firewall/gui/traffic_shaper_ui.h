@@ -1,36 +1,36 @@
 #pragma once
+
 #include <QWidget>
-#include <QLabel>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QComboBox>
-#include <QMessageBox>
-#include <QNetworkInterface>
-#include <QIntValidator>
+#include <QColor>
+
+class QComboBox;
+class QPushButton;
+class QSpinBox;
+class QLabel;
+class TrafficShaper;
 
 class TrafficShaperUI : public QWidget {
     Q_OBJECT
-
 public:
     explicit TrafficShaperUI(QWidget* parent = nullptr);
-    ~TrafficShaperUI();
-
-signals:
-    void shapingApplied(const QString& iface, int rate);
-    void shapingCleared(const QString& iface);
 
 private slots:
-    void applyShaping();
-    void clearShaping();
+    void onApplyClicked();
+    void onClearClicked();
+    void refreshInterfaces();
 
 private:
-    QComboBox* ifaceCombo;
-    QLineEdit* rateEdit;
+    void setStatus(const QString& text, QColor color = Qt::black);
+    void setBusy(bool busy);
+
+    QComboBox* ifaceBox;
+    QPushButton* refreshBtn;
+    QSpinBox* rateSpin;
+    QSpinBox* burstSpin;
+    QSpinBox* latencySpin;
     QPushButton* applyBtn;
     QPushButton* clearBtn;
     QLabel* statusLabel;
-
-    void updateStatus(const QString& msg, bool error = false);
-    bool validateInput(QString& iface, int& rate);
-    void populateInterfaces();
+    QLabel* busyLabel;
+    TrafficShaper* shaper;
 };
