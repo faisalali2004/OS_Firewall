@@ -1,63 +1,48 @@
-#include "rule_engine.h"
-#include <nlohmann/json.hpp>
-#include <fstream>
-#include <algorithm>
+#include "dpi_engine.h"
+#include <cstring>
 #include <iostream>
+#include <stdexcept>
 
-using json = nlohmann::json;
-
-RuleAction RuleEngine::actionFromString(const std::string& s) {
-    if (s == "ALLOW") return RuleAction::ALLOW;
-    if (s == "DROP") return RuleAction::DROP;
-    if (s == "LOG") return RuleAction::LOG;
-    if (s == "SHAPE") return RuleAction::SHAPE;
-    return RuleAction::DROP;
+DPIEngine::DPIEngine() {
+    try {
+        // Add default protocol signatures (simple regex for demonstration)
+        signatures.push_back({"HTTP", std::regex(R"(^GET |^POST |^HTTP/1\.)"), DPIResult::HTTP});
+        signatures.push_back({"DNS", std::regex(R"(^.{2}\x01\x00)", std::regex::optimize), DPIResult::DNS});
+        signatures.push_back({"TLS", std::regex(R"(^\x16\x03)", std::regex::optimize), DPIResult::TLS});
+        signatures.push_back({"SSH", std::regex(R"(^SSH-)", std::regex::optimize), DPIResult::SSH});
+    } catch (const std::exception& e) {
+        std::cerr << "[DPIEngine] Error initializing signatures: " << e.what() << std::endl;
+    }
 }
 
-bool RuleEngine::loadRules(const std::string& path) {
-    std::ifstream f(path);
-    if (!f) {
-        std::cerr << "[RuleEngine] Failed to open rule file: " << path << std::endl;
-        return false;
-    }
-    json j;
+void DPIEngine::addSignature(const std::string& name, const std::string& regex_str, DPIResult result) {
     try {
-        f >> j;
+        signatures.push_back({name, std::regex(regex_str, std::regex::optimize), result});
     } catch (const std::exception& e) {
-        std::cerr << "[RuleEngine] Failed to parse JSON: " << e.what() << std::endl;
-        return false;
+        std::cerr << "[DPIEngine] Failed to add signature '" << name << "': " << e.what() << std::endl;
     }
-    rules.clear();
-    for (const auto& item : j) {
-        Rule r;
+}
+
+DPIResult DPIEngine::inspect(const uint8_t* payload, size_t len, std::string& matched_info) {
+    if (!payload || len == 0) {
+        matched_info = "Empty payload";
+        return DPIResult::NONE;
+    }
+
+    // Convert binary payload to string safely
+    std::string data(reinterpret_cast<const char*>(payload), len);
+
+    for (const auto& sig : signatures) {
         try {
-            r.src_ip = item.value("src_ip", "0.0.0.0/0");
-            r.dst_ip = item.value("dst_ip", "0.0.0.0/0");
-            r.src_port = item.value("src_port", 0);
-            r.dst_port = item.value("dst_port", 0);
-            r.protocol = item.value("protocol", "ANY");
-            r.action = actionFromString(item.value("action", "DROP"));
+            if (std::regex_search(data, sig.pattern)) {
+                matched_info = sig.name;
+                return sig.result;
+            }
         } catch (const std::exception& e) {
-            std::cerr << "[RuleEngine] Error parsing rule: " << e.what() << std::endl;
+            std::cerr << "[DPIEngine] Regex error for signature '" << sig.name << "': " << e.what() << std::endl;
             continue;
         }
-        rules.push_back(r);
     }
-    std::cout << "[RuleEngine] Loaded " << rules.size() << " rules from " << path << std::endl;
-    return true;
-}
-
-RuleAction RuleEngine::evaluate(const std::string& src_ip, int src_port,
-                                const std::string& dst_ip, int dst_port,
-                                const std::string& protocol) {
-    for (const auto& rule : rules) {
-        bool match = true;
-        if (rule.src_ip != "0.0.0.0/0" && rule.src_ip != src_ip) match = false;
-        if (rule.dst_ip != "0.0.0.0/0" && rule.dst_ip != dst_ip) match = false;
-        if (rule.src_port != 0 && rule.src_port != src_port) match = false;
-        if (rule.dst_port != 0 && rule.dst_port != dst_port) match = false;
-        if (rule.protocol != "ANY" && rule.protocol != protocol) match = false;
-        if (match) return rule.action;
-    }
-    return RuleAction::ALLOW; // Default allow
+    matched_info = "No match";
+    return DPIResult::UNKNOWN;
 }
