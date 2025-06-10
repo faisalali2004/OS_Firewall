@@ -4,70 +4,81 @@ set -e
 
 echo "==== Kali Firewall Installer ===="
 
-# Function to check and install a package if missing
-install_if_missing() {
-    PKG="$1"
-    if ! dpkg -s "$PKG" >/dev/null 2>&1; then
-        echo "[*] Installing $PKG..."
-        if ! sudo apt-get install -y "$PKG"; then
-            echo "[!] Failed to install $PKG. Exiting."
-            exit 1
+# List of required packages
+REQUIRED_PKGS=(build-essential cmake qtbase5-dev qtbase5-dev-tools libsqlite3-dev libnetfilter-queue-dev nlohmann-json3-dev pkg-config)
+
+# List of required scripts
+REQUIRED_SCRIPTS=(setup_iptables.sh start_firewall.sh stop_firewall.sh)
+
+# Function to check and install missing packages
+check_and_install_packages() {
+    echo "[*] Checking required packages..."
+    MISSING_PKGS=()
+    for pkg in "${REQUIRED_PKGS[@]}"; do
+        if ! dpkg -s "$pkg" &>/dev/null; then
+            MISSING_PKGS+=("$pkg")
+        else
+            echo "[*] $pkg already installed."
         fi
-    else
-        echo "[*] $PKG already installed."
+    done
+
+    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+        echo "[!] Missing packages: ${MISSING_PKGS[*]}"
+        echo "[*] Installing missing packages..."
+        sudo apt-get update
+        sudo apt-get install -y "${MISSING_PKGS[@]}"
     fi
 }
 
-echo "[*] Updating package list..."
-if ! sudo apt-get update; then
-    echo "[!] Failed to update package list. Exiting."
-    exit 1
-fi
+# Function to check and chmod scripts
+check_and_chmod_scripts() {
+    echo "[*] Checking script permissions..."
+    for script in "${REQUIRED_SCRIPTS[@]}"; do
+        if [ ! -f "./$script" ]; then
+            echo "[!] Required script $script not found in $(pwd). Exiting."
+            exit 1
+        fi
+        if [ ! -x "./$script" ]; then
+            echo "[*] Setting executable permission for $script"
+            chmod +x "./$script"
+        fi
+    done
+}
 
-# Install dependencies
-install_if_missing build-essential
-install_if_missing cmake
-install_if_missing qtbase5-dev
-install_if_missing libsqlite3-dev
-install_if_missing libnetfilter-queue-dev
-install_if_missing nlohmann-json3-dev
-install_if_missing pkg-config
-
-# Build the project
-echo "[*] Building the firewall..."
-cd "$(dirname "$0")/.."
-if [ ! -f CMakeLists.txt ]; then
-    echo "[!] CMakeLists.txt not found. Please check your project structure."
-    exit 1
-fi
-
-mkdir -p build
-cd build
-if ! cmake ..; then
-    echo "[!] cmake configuration failed. Exiting."
-    exit 1
-fi
-if ! make -j$(nproc); then
-    echo "[!] Build failed. Exiting."
-    exit 1
-fi
-cd ..
-
-# Set up iptables rules
-if [ -f ./scripts/setup_iptables.sh ]; then
-    echo "[*] Setting up iptables rules for NFQUEUE..."
-    if ! sudo ./scripts/setup_iptables.sh; then
-        echo "[!] Failed to set up iptables rules. Exiting."
-        exit 1
-    fi
+# Move to project root if in scripts/
+if [ "$(basename "$PWD")" == "scripts" ]; then
+    cd ..
+    PROJECT_ROOT="$PWD"
+    cd scripts
 else
-    echo "[!] setup_iptables.sh not found in scripts/. Skipping iptables setup."
+    PROJECT_ROOT="$PWD"
 fi
 
-# Optionally call manage.sh if it exists
-if [ -f ./scripts/manage.sh ]; then
-    echo "[*] You can manage the firewall with: ./scripts/manage.sh start|stop|status"
+# Step 1: Check and install packages
+check_and_install_packages
+
+# Step 2: Check and chmod scripts
+check_and_chmod_scripts
+
+# Step 3: Build the firewall
+echo "[*] Building the firewall..."
+cd ..
+if [ ! -d build ]; then
+    mkdir build
+fi
+cd build
+cmake .. || { echo "[!] CMake configuration failed. Exiting."; exit 1; }
+make || { echo "[!] Build failed. Exiting."; exit 1; }
+
+# Step 4: Setup iptables rules
+cd ../scripts
+echo "[*] Setting up iptables rules for NFQUEUE..."
+if sudo ./setup_iptables.sh; then
+    echo "[*] iptables rules set up successfully."
+else
+    echo "[!] Failed to set up iptables rules. Exiting."
+    exit 1
 fi
 
-echo "==== Installation Complete ===="
-echo "To run the firewall GUI, execute: sudo ./build/firewall"
+echo "==== Installation Complete! ===="
+echo "You can now use start_firewall.sh and stop_firewall.sh to control the firewall."
