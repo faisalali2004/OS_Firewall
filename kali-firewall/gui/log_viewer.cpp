@@ -1,27 +1,50 @@
 #include "log_viewer.h"
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QHeaderView>
-#include <sqlite3.h>
-#include <QTableWidget>
-#include <QTimer>
-#include <vector>
-#include <string>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QDateTime>
 
 LogViewer::LogViewer(QWidget* parent)
-    : QWidget(parent)
+    : QWidget(parent),
+      table(new QTableWidget(this)),
+      timer(new QTimer(this)),
+      refreshBtn(new QPushButton("Refresh Now", this)),
+      statusLabel(new QLabel(this)),
+      logPath("../logs/firewall_log.json")
 {
-    auto* layout = new QVBoxLayout(this);
-    table = new QTableWidget(this);
-    table->setColumnCount(8);
-    table->setHorizontalHeaderLabels({"Time", "Src IP", "Src Port", "Dst IP", "Dst Port", "Proto", "Action", "Info"});
+    table->setColumnCount(5);
+    table->setHorizontalHeaderLabels({"Timestamp", "Source IP", "Destination IP", "Protocol", "Action"});
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    layout->addWidget(table);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
-    timer = new QTimer(this);
+    auto* btnLayout = new QHBoxLayout;
+    btnLayout->addWidget(refreshBtn);
+
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(table);
+    mainLayout->addLayout(btnLayout);
+    mainLayout->addWidget(statusLabel);
+
+    setLayout(mainLayout);
+
     connect(timer, &QTimer::timeout, this, &LogViewer::refreshLogs);
-    timer->start(2000); // Refresh every 2 seconds
+    connect(refreshBtn, &QPushButton::clicked, this, &LogViewer::manualRefresh);
 
+    timer->start(3000); // Refresh every 3 seconds
     refreshLogs();
+    updateStatus("Ready.");
+}
+
+LogViewer::~LogViewer() = default;
+
+void LogViewer::manualRefresh() {
+    refreshLogs();
+    updateStatus("Manually refreshed logs.");
 }
 
 void LogViewer::refreshLogs() {
@@ -29,26 +52,47 @@ void LogViewer::refreshLogs() {
 }
 
 void LogViewer::loadLogs() {
-    sqlite3* db = nullptr;
-    if (sqlite3_open("../logs/firewall.db", &db) != SQLITE_OK) return;
+    QFile file(logPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        updateStatus("Failed to open log file: " + logPath, true);
+        table->setRowCount(0);
+        return;
+    }
+    QByteArray data = file.readAll();
+    file.close();
 
-    const char* sql = "SELECT timestamp, src_ip, src_port, dst_ip, dst_port, protocol, action, info FROM logs ORDER BY id DESC LIMIT 100";
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        sqlite3_close(db);
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError) {
+        updateStatus("Failed to parse log JSON: " + err.errorString(), true);
+        table->setRowCount(0);
+        return;
+    }
+    if (!doc.isArray()) {
+        updateStatus("Log file format error.", true);
+        table->setRowCount(0);
         return;
     }
 
+    QJsonArray logs = doc.array();
     table->setRowCount(0);
-    int row = 0;
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    for (const auto& val : logs) {
+        if (!val.isObject()) continue;
+        QJsonObject obj = val.toObject();
+        int row = table->rowCount();
         table->insertRow(row);
-        for (int col = 0; col < 8; ++col) {
-            auto* item = new QTableWidgetItem(reinterpret_cast<const char*>(sqlite3_column_text(stmt, col)));
-            table->setItem(row, col, item);
-        }
-        ++row;
+        table->setItem(row, 0, new QTableWidgetItem(obj.value("timestamp").toString()));
+        table->setItem(row, 1, new QTableWidgetItem(obj.value("src_ip").toString()));
+        table->setItem(row, 2, new QTableWidgetItem(obj.value("dst_ip").toString()));
+        table->setItem(row, 3, new QTableWidgetItem(obj.value("protocol").toString()));
+        table->setItem(row, 4, new QTableWidgetItem(obj.value("action").toString()));
     }
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
+    updateStatus(QString("Loaded %1 log entries.").arg(table->rowCount()));
+}
+
+void LogViewer::updateStatus(const QString& msg, bool error) {
+    statusLabel->setText(msg);
+    QPalette pal = statusLabel->palette();
+    pal.setColor(QPalette::WindowText, error ? Qt::red : Qt::darkGreen);
+    statusLabel->setPalette(pal);
 }

@@ -1,11 +1,34 @@
 #pragma once
-#include <QWidget>
+#include <string>
+#include <vector>
+#include <regex>
+#include <cstdint>
 
-class DPIManager : public QWidget {
-    Q_OBJECT
+enum class DPIResult {
+    NONE,
+    HTTP,
+    DNS,
+    TLS,
+    SSH,
+    UNKNOWN
+};
 
+struct DPISignature {
+    std::string name;
+    std::regex pattern;
+    DPIResult result;
+};
+
+class DPIEngine {
 public:
-    explicit DPIManager(QWidget* parent = nullptr);
-    ~DPIManager();
-    // ... other members ...
+    DPIEngine();
+    DPIResult inspect(const uint8_t* payload, size_t len, std::string& matched_info);
+
+    // For extensibility
+    void addSignature(const std::string& name, const std::string& regex_str, DPIResult result);
+    void clearSignatures();
+    const std::vector<DPISignature>& getSignatures() const;
+
+private:
+    std::vector<DPISignature> signatures;
 };

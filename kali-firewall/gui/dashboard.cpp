@@ -1,48 +1,85 @@
 #include "dashboard.h"
-#include <QVBoxLayout>
-#include <QHeaderView>
+#include <QApplication>
+#include <QDateTime>
+#include <QRandomGenerator>
 
 Dashboard::Dashboard(QWidget* parent)
-    : QWidget(parent)
+    : QWidget(parent),
+      statusLabel(new QLabel("Firewall Status: <b>Active</b>", this)),
+      trafficLabel(new QLabel("Traffic: 0 packets", this)),
+      blockedLabel(new QLabel("Blocked: 0 packets", this)),
+      cpuBar(new QProgressBar(this)),
+      memBar(new QProgressBar(this)),
+      statsTimer(new QTimer(this)),
+      logBtn(new QPushButton("View Logs", this)),
+      ruleBtn(new QPushButton("Edit Rules", this)),
+      shaperBtn(new QPushButton("Traffic Shaper", this)),
+      dpiBtn(new QPushButton("DPI Manager", this))
 {
-    auto* layout = new QVBoxLayout(this);
+    setupUI();
 
-    packetRateLabel = new QLabel("Packet Rate: -- pkts/sec", this);
-    dpiMatchLabel = new QLabel("DPI Matches: --", this);
+    connect(statsTimer, &QTimer::timeout, this, &Dashboard::updateStats);
+    connect(logBtn, &QPushButton::clicked, this, &Dashboard::openLogViewer);
+    connect(ruleBtn, &QPushButton::clicked, this, &Dashboard::openRuleEditor);
+    connect(shaperBtn, &QPushButton::clicked, this, &Dashboard::openTrafficShaper);
+    connect(dpiBtn, &QPushButton::clicked, this, &Dashboard::openDPIManager);
 
-    connTable = new QTableWidget(this);
-    connTable->setColumnCount(5);
-    connTable->setHorizontalHeaderLabels({"PID", "User", "Process", "Src -> Dst", "Protocol"});
-    connTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-
-    layout->addWidget(packetRateLabel);
-    layout->addWidget(dpiMatchLabel);
-    layout->addWidget(new QLabel("Active Connections:", this));
-    layout->addWidget(connTable);
-
-    timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &Dashboard::refreshStats);
-    timer->start(2000); // Refresh every 2 seconds
-
-    refreshStats();
+    statsTimer->start(2000); // Update stats every 2 seconds
+    updateStats();
 }
 
-void Dashboard::refreshStats() {
-    // Placeholder: Replace with real stats from your backend
-    packetRateLabel->setText("Packet Rate: 123 pkts/sec");
-    dpiMatchLabel->setText("DPI Matches: HTTP(5), DNS(2)");
+Dashboard::~Dashboard() = default;
 
-    loadConnections();
+void Dashboard::setupUI() {
+    cpuBar->setRange(0, 100);
+    memBar->setRange(0, 100);
+    cpuBar->setFormat("CPU Usage: %p%");
+    memBar->setFormat("Memory Usage: %p%");
+
+    auto* statsBox = new QGroupBox("System Stats", this);
+    auto* statsLayout = new QVBoxLayout;
+    statsLayout->addWidget(cpuBar);
+    statsLayout->addWidget(memBar);
+    statsBox->setLayout(statsLayout);
+
+    auto* trafficBox = new QGroupBox("Traffic Overview", this);
+    auto* trafficLayout = new QVBoxLayout;
+    trafficLayout->addWidget(trafficLabel);
+    trafficLayout->addWidget(blockedLabel);
+    trafficBox->setLayout(trafficLayout);
+
+    auto* btnLayout = new QHBoxLayout;
+    btnLayout->addWidget(logBtn);
+    btnLayout->addWidget(ruleBtn);
+    btnLayout->addWidget(shaperBtn);
+    btnLayout->addWidget(dpiBtn);
+
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(statusLabel);
+    mainLayout->addWidget(statsBox);
+    mainLayout->addWidget(trafficBox);
+    mainLayout->addLayout(btnLayout);
+
+    setLayout(mainLayout);
+    setMinimumWidth(400);
 }
 
-void Dashboard::loadConnections() {
-    // Placeholder: Replace with real connection data from ProcTracker
-    connTable->setRowCount(0);
-    int row = connTable->rowCount();
-    connTable->insertRow(row);
-    connTable->setItem(row, 0, new QTableWidgetItem("1234"));
-    connTable->setItem(row, 1, new QTableWidgetItem("root"));
-    connTable->setItem(row, 2, new QTableWidgetItem("/usr/bin/python3"));
-    connTable->setItem(row, 3, new QTableWidgetItem("192.168.1.2:12345 -> 8.8.8.8:53"));
-    connTable->setItem(row, 4, new QTableWidgetItem("UDP"));
+void Dashboard::updateStats() {
+    // Simulate stats for demo; replace with real data in integration
+    int cpu = QRandomGenerator::global()->bounded(100);
+    int mem = QRandomGenerator::global()->bounded(100);
+    int traffic = QRandomGenerator::global()->bounded(10000);
+    int blocked = QRandomGenerator::global()->bounded(1000);
+
+    cpuBar->setValue(cpu);
+    memBar->setValue(mem);
+    trafficLabel->setText(QString("Traffic: %1 packets").arg(traffic));
+    blockedLabel->setText(QString("Blocked: %1 packets").arg(blocked));
+
+    // Optionally, update status based on conditions
+    if (cpu > 90 || mem > 90) {
+        statusLabel->setText("Firewall Status: <b style='color:red;'>High Load</b>");
+    } else {
+        statusLabel->setText("Firewall Status: <b>Active</b>");
+    }
 }
