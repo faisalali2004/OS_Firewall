@@ -1,34 +1,40 @@
 #pragma once
-#include <string>
+#include <QWidget>
+#include <QTableWidget>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QLabel>
 #include <vector>
-#include <regex>
-#include <cstdint>
+#include <QString>
 
-enum class DPIResult {
-    NONE,
-    HTTP,
-    DNS,
-    TLS,
-    SSH,
-    UNKNOWN
+struct GuiDPISignature {
+    QString name;
+    QString pattern;
+    QString result;
 };
 
-struct DPISignature {
-    std::string name;
-    std::regex pattern;
-    DPIResult result;
-};
+class DPIManager : public QWidget {
+    Q_OBJECT
 
-class DPIEngine {
 public:
-    DPIEngine();
-    DPIResult inspect(const uint8_t* payload, size_t len, std::string& matched_info);
+    explicit DPIManager(QWidget* parent = nullptr);
+    ~DPIManager();
 
-    // For extensibility
-    void addSignature(const std::string& name, const std::string& regex_str, DPIResult result);
-    void clearSignatures();
-    const std::vector<DPISignature>& getSignatures() const;
+private slots:
+    void addSignature();
+    void removeSelectedSignature();
 
 private:
-    std::vector<DPISignature> signatures;
+    QTableWidget* table;
+    QLineEdit* nameEdit;
+    QLineEdit* patternEdit;
+    QLineEdit* resultEdit;
+    QPushButton* addBtn;
+    QPushButton* removeBtn;
+    QLabel* statusLabel;
+
+    std::vector<GuiDPISignature> signatures;
+
+    void updateStatus(const QString& msg, bool error = false);
+    void populateTable();
 };

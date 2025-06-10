@@ -1,56 +1,113 @@
-#include "dpi_engine.h"
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
+#include "dpi_manager.h"
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QMessageBox>
 
-DPIEngine::DPIEngine() {
-    try {
-        // Add default protocol signatures (regex patterns)
-        signatures.push_back({"HTTP", std::regex(R"(^GET |^POST |^HTTP/1\.)", std::regex::optimize), DPIResult::HTTP});
-        signatures.push_back({"DNS", std::regex(R"(^.{2}\x01\x00)", std::regex::optimize), DPIResult::DNS});
-        signatures.push_back({"TLS", std::regex(R"(^\x16\x03)", std::regex::optimize), DPIResult::TLS});
-        signatures.push_back({"SSH", std::regex(R"(^SSH-)", std::regex::optimize), DPIResult::SSH});
-    } catch (const std::exception& e) {
-        std::cerr << "[DPIEngine] Error initializing signatures: " << e.what() << std::endl;
+DPIManager::DPIManager(QWidget* parent)
+    : QWidget(parent),
+      table(new QTableWidget(this)),
+      nameEdit(new QLineEdit(this)),
+      patternEdit(new QLineEdit(this)),
+      resultEdit(new QLineEdit(this)),
+      addBtn(new QPushButton("Add Signature", this)),
+      removeBtn(new QPushButton("Remove Selected", this)),
+      statusLabel(new QLabel(this))
+{
+    table->setColumnCount(3);
+    table->setHorizontalHeaderLabels({"Name", "Pattern", "Result"});
+    table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+
+    nameEdit->setPlaceholderText("Signature Name");
+    patternEdit->setPlaceholderText("Regex Pattern");
+    resultEdit->setPlaceholderText("Result Label");
+
+    auto* inputLayout = new QHBoxLayout;
+    inputLayout->addWidget(nameEdit);
+    inputLayout->addWidget(patternEdit);
+    inputLayout->addWidget(resultEdit);
+    inputLayout->addWidget(addBtn);
+
+    auto* btnLayout = new QHBoxLayout;
+    btnLayout->addWidget(removeBtn);
+
+    auto* mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(table);
+    mainLayout->addLayout(inputLayout);
+    mainLayout->addLayout(btnLayout);
+    mainLayout->addWidget(statusLabel);
+
+    setLayout(mainLayout);
+
+    connect(addBtn, &QPushButton::clicked, this, &DPIManager::addSignature);
+    connect(removeBtn, &QPushButton::clicked, this, &DPIManager::removeSelectedSignature);
+
+    // Optionally, add some default signatures
+    signatures.push_back({"HTTP", R"(^GET |^POST |^HTTP/1\.)", "HTTP"});
+    signatures.push_back({"DNS", R"(^.{2}\x01\x00)", "DNS"});
+    signatures.push_back({"TLS", R"(^\x16\x03)", "TLS"});
+    signatures.push_back({"SSH", R"(^SSH-)", "SSH"});
+    populateTable();
+    updateStatus("Ready.");
+}
+
+DPIManager::~DPIManager() = default;
+
+void DPIManager::addSignature() {
+    QString name = nameEdit->text().trimmed();
+    QString pattern = patternEdit->text().trimmed();
+    QString result = resultEdit->text().trimmed();
+
+    if (name.isEmpty() || pattern.isEmpty() || result.isEmpty()) {
+        updateStatus("All fields are required.", true);
+        return;
+    }
+
+    // Optionally, validate regex
+    QRegExp rx(pattern);
+    if (!rx.isValid()) {
+        updateStatus("Invalid regex pattern.", true);
+        return;
+    }
+
+    signatures.push_back({name, pattern, result});
+    populateTable();
+    nameEdit->clear();
+    patternEdit->clear();
+    resultEdit->clear();
+    updateStatus("Signature added.");
+}
+
+void DPIManager::removeSelectedSignature() {
+    auto selected = table->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        updateStatus("No signature selected.", true);
+        return;
+    }
+    int row = selected.first().row();
+    if (row >= 0 && row < static_cast<int>(signatures.size())) {
+        signatures.erase(signatures.begin() + row);
+        populateTable();
+        updateStatus("Signature removed.");
     }
 }
 
-void DPIEngine::addSignature(const std::string& name, const std::string& regex_str, DPIResult result) {
-    try {
-        signatures.push_back({name, std::regex(regex_str, std::regex::optimize), result});
-    } catch (const std::exception& e) {
-        std::cerr << "[DPIEngine] Failed to add signature '" << name << "': " << e.what() << std::endl;
-    }
-}
-
-void DPIEngine::clearSignatures() {
-    signatures.clear();
-}
-
-const std::vector<DPISignature>& DPIEngine::getSignatures() const {
-    return signatures;
-}
-
-DPIResult DPIEngine::inspect(const uint8_t* payload, size_t len, std::string& matched_info) {
-    if (!payload || len == 0) {
-        matched_info = "Empty payload";
-        return DPIResult::NONE;
-    }
-
-    // Convert binary payload to string safely
-    std::string data(reinterpret_cast<const char*>(payload), len);
-
+void DPIManager::populateTable() {
+    table->setRowCount(0);
     for (const auto& sig : signatures) {
-        try {
-            if (std::regex_search(data, sig.pattern)) {
-                matched_info = sig.name;
-                return sig.result;
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "[DPIEngine] Regex error for signature '" << sig.name << "': " << e.what() << std::endl;
-            continue;
-        }
+        int row = table->rowCount();
+        table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(sig.name));
+        table->setItem(row, 1, new QTableWidgetItem(sig.pattern));
+        table->setItem(row, 2, new QTableWidgetItem(sig.result));
     }
-    matched_info = "No match";
-    return DPIResult::UNKNOWN;
+}
+
+void DPIManager::updateStatus(const QString& msg, bool error) {
+    statusLabel->setText(msg);
+    QPalette pal = statusLabel->palette();
+    pal.setColor(QPalette::WindowText, error ? Qt::red : Qt::darkGreen);
+    statusLabel->setPalette(pal);
 }
