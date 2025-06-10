@@ -168,3 +168,9 @@ QString RuleEngine::askUserForDecision(const PacketInfo& pkt) {
 
     return decision;
 }
+
+// --- SLOT IMPLEMENTATION REQUIRED BY QT ---
+void RuleEngine::userDecisionReceived(const QString& action) {
+    // This slot is used to unblock the event loop in askUserForDecision.
+    // No code needed here, but must exist for Qt's signal/slot system.
+}
