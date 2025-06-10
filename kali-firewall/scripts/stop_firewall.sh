@@ -2,6 +2,7 @@
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 FIREWALL_BIN="../build/firewall"
@@ -10,32 +11,38 @@ cd "$SCRIPT_DIR"
 
 echo -e "${GREEN}==== Stopping Kali Firewall ====${NC}"
 
-# Stop the firewall process
-PID=$(pgrep -f "$FIREWALL_BIN")
-if [ -z "$PID" ]; then
-    echo -e "${RED}[!] No running firewall process found.${NC}"
+# Stop all running firewall processes
+PIDS=$(pgrep -f "$FIREWALL_BIN")
+if [ -z "$PIDS" ]; then
+    echo -e "${YELLOW}[!] No running firewall process found.${NC}"
 else
-    echo "[*] Stopping firewall process (PID: $PID)..."
-    sudo kill "$PID"
-    sleep 1
-    if pgrep -f "$FIREWALL_BIN" > /dev/null; then
-        echo -e "${RED}[!] Failed to stop firewall process.${NC}"
-        exit 1
-    else
-        echo -e "${GREEN}[*] Firewall process stopped successfully.${NC}"
-    fi
+    for PID in $PIDS; do
+        echo "[*] Stopping firewall process (PID: $PID)..."
+        sudo kill "$PID"
+        sleep 1
+        if ps -p "$PID" > /dev/null; then
+            echo -e "${RED}[!] Failed to stop firewall process with PID $PID.${NC}"
+        else
+            echo -e "${GREEN}[*] Firewall process $PID stopped successfully.${NC}"
+        fi
+    done
 fi
 
-# Optionally, remove iptables rules if teardown_iptables.sh exists
-if [ -f "./teardown_iptables.sh" ]; then
-    echo "[*] Removing iptables rules..."
-    if sudo ./teardown_iptables.sh; then
-        echo -e "${GREEN}[*] iptables rules removed successfully.${NC}"
-    else
-        echo -e "${RED}[!] Failed to remove iptables rules.${NC}"
-    fi
+# Remove all iptables rules using NFQUEUE
+echo "[*] Scanning for iptables NFQUEUE rules to remove..."
+NFQUEUE_RULES=$(sudo iptables-save | grep NFQUEUE || true)
+if [ -z "$NFQUEUE_RULES" ]; then
+    echo -e "${YELLOW}[!] No NFQUEUE rules found in iptables.${NC}"
 else
-    echo "[*] No teardown_iptables.sh script found. Skipping iptables cleanup."
+    echo "[*] Removing all NFQUEUE rules from iptables..."
+    sudo iptables-save | grep NFQUEUE | while read -r rule ; do
+        chain=$(echo $rule | awk '{print $2}')
+        rule_spec=$(echo $rule | sed 's/-A [A-Z0-9_]* //')
+        echo "[*] Removing rule from $chain: $rule_spec"
+        sudo iptables -D $chain $rule_spec 2>/dev/null || \
+            echo -e "${YELLOW}[!] Could not remove rule: $rule_spec from $chain (may already be gone).${NC}"
+    done
+    echo -e "${GREEN}[*] All NFQUEUE rules removed from iptables.${NC}"
 fi
 
-echo -e "${GREEN}==== Firewall stopped. ====${NC}"
+echo -e "${GREEN}==== Firewall stopped and iptables cleaned. ====${NC}"

@@ -14,7 +14,6 @@ REQUIRED_PKGS=(build-essential cmake qtbase5-dev qtbase5-dev-tools libsqlite3-de
 # List of required scripts
 REQUIRED_SCRIPTS=(setup_iptables.sh start_firewall.sh stop_firewall.sh)
 
-# Function to check and install missing packages
 check_and_install_packages() {
     echo "[*] Checking required packages..."
     MISSING_PKGS=()
@@ -34,7 +33,6 @@ check_and_install_packages() {
     fi
 }
 
-# Function to check and chmod scripts
 check_and_chmod_scripts() {
     echo "[*] Checking script permissions..."
     for script in "${REQUIRED_SCRIPTS[@]}"; do
@@ -90,7 +88,7 @@ fi
 
 if [ ! -f logs/firewall_log.json ]; then
     echo "[*] Creating empty log file logs/firewall_log.json..."
-    touch logs/firewall_log.json
+    echo "[]" > logs/firewall_log.json
     chmod 644 logs/firewall_log.json
 fi
 
@@ -110,6 +108,28 @@ echo "You can now use start_firewall.sh and stop_firewall.sh to control the fire
 # Optional: Prompt to run the firewall now
 read -p "Do you want to start the firewall now? [y/N]: " yn
 case $yn in
-    [Yy]* ) ./start_firewall.sh ;;
-    * ) echo "You can start it later with ./start_firewall.sh";;
+    [Yy]* )
+        echo "[*] Starting firewall..."
+        # Set XDG_RUNTIME_DIR if not set to avoid Qt warnings
+        if [ -z "$XDG_RUNTIME_DIR" ]; then
+            export XDG_RUNTIME_DIR="/tmp/runtime-$USER"
+            mkdir -p "$XDG_RUNTIME_DIR"
+            chmod 700 "$XDG_RUNTIME_DIR"
+        fi
+        ./start_firewall.sh &
+        FW_PID=$!
+        sleep 2
+        read -p "Firewall is running (PID $FW_PID). Do you want to terminate it now? [y/N]: " killnow
+        case $killnow in
+            [Yy]* )
+                ./stop_firewall.sh
+                ;;
+            * )
+                echo "Firewall will keep running. Use ./stop_firewall.sh to stop it later."
+                ;;
+        esac
+        ;;
+    * )
+        echo "You can start it later with ./start_firewall.sh"
+        ;;
 esac
