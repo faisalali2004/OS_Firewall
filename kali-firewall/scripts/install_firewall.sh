@@ -80,6 +80,20 @@ if [ ! -f firewall ]; then
     exit 1
 fi
 
+# Step 4.5: Ensure logs directory and log file exist
+cd "$PROJECT_ROOT"
+if [ ! -d logs ]; then
+    echo "[*] Creating logs directory..."
+    mkdir logs
+    chmod 755 logs
+fi
+
+if [ ! -f logs/firewall_log.json ]; then
+    echo "[*] Creating empty log file logs/firewall_log.json..."
+    touch logs/firewall_log.json
+    chmod 644 logs/firewall_log.json
+fi
+
 # Step 5: Setup iptables rules
 cd "$SCRIPT_DIR"
 echo "[*] Setting up iptables rules for NFQUEUE..."
