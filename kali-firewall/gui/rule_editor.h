@@ -1,5 +1,8 @@
 #pragma once
 #include <QWidget>
+#include <QTableWidget>
+#include <QPushButton>
+#include <QJsonArray>
 
 class RuleEditor : public QWidget {
     Q_OBJECT

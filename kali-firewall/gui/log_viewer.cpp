@@ -2,6 +2,8 @@
 #include <QVBoxLayout>
 #include <QHeaderView>
 #include <sqlite3.h>
+#include <QTableWidget>
+#include <QTimer>
 #include <vector>
 #include <string>
 

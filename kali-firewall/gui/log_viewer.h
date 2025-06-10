@@ -1,5 +1,7 @@
 #pragma once
 #include <QWidget>
+#include <QTableWidget>
+#include <QTimer>
 
 class LogViewer : public QWidget {
     Q_OBJECT

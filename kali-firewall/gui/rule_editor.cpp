@@ -6,6 +6,8 @@
 #include <QJsonObject>
 #include <QHeaderView>
 #include <QMessageBox>
+#include <QTableWidget>
+#include <QPushButton>
 
 RuleEditor::RuleEditor(QWidget* parent)
     : QWidget(parent)

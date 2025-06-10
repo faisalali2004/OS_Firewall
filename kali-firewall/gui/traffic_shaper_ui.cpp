@@ -2,6 +2,10 @@
 #include "../core/traffic_shaper.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QTableWidget>
+#include <QPushButton>
+#include <QLabel>
+#include <QLineEdit>    
 
 TrafficShaperUI::TrafficShaperUI(QWidget* parent)
     : QWidget(parent)
