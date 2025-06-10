@@ -3,19 +3,31 @@
 #include <string>
 #include <vector>
 #include <regex>
+#include <cstdint>
 
-enum class DPIResult { NONE, HTTP, DNS, TLS, SSH };
+enum class DPIResult {
+    NONE,
+    HTTP,
+    DNS,
+    TLS,
+    SSH,
+    UNKNOWN
+};
+
+struct DPISignature {
+    std::string name;
+    std::regex pattern;
+    DPIResult result;
+};
 
 class DPIEngine {
 public:
     DPIEngine();
     DPIResult inspect(const uint8_t* payload, size_t len, std::string& matched_info);
-    void addSignature(const std::string& name, const std::string& pattern);
+
+    // For extensibility
+    void addSignature(const std::string& name, const std::string& regex_str, DPIResult result);
 
 private:
-    struct Signature {
-        std::string name;
-        std::regex pattern;
-    };
-    std::vector<Signature> signatures;
+    std::vector<DPISignature> signatures;
 };
