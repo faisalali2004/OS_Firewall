@@ -1,6 +1,12 @@
 #include "rules.h"
+#include "dpi_engine.h"
+#include "logger.h"
+#include "packet_capture.h"
+#include "rule_engine.h"
+#include "traffic_shaper.h"
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <algorithm>
 
 // --- Rule Implementation ---
@@ -34,24 +40,35 @@ bool Rule::deserialize(const std::string& str) {
     return !id.empty() && !action.empty();
 }
 
-// --- RuleManager Implementation (optional, if you want to use it) ---
+// --- RuleManager Implementation ---
 
-RuleManager::RuleManager() {}
+RuleManager::RuleManager()
+    : dpiEngine(new DPIEngine()), logger(new Logger()), packetCapture(new PacketCapture()),
+      ruleEngine(new RuleEngine()), trafficShaper(new TrafficShaper())
+{}
+
+RuleManager::~RuleManager() {
+    delete dpiEngine;
+    delete logger;
+    delete packetCapture;
+    delete ruleEngine;
+    delete trafficShaper;
+}
 
 void RuleManager::addRule(const Rule& rule) {
     rules.push_back(rule);
-    std::cout << "[+] Rule added: " << rule.getDescription() << std::endl;
+    logger->log("[+] Rule added: " + rule.getDescription());
 }
 
 bool RuleManager::removeRuleById(const std::string& ruleId) {
     auto it = std::remove_if(rules.begin(), rules.end(),
         [&ruleId](const Rule& rule) { return rule.getId() == ruleId; });
     if (it != rules.end()) {
+        logger->log("[-] Rule removed: " + ruleId);
         rules.erase(it, rules.end());
-        std::cout << "[-] Rule removed: " << ruleId << std::endl;
         return true;
     }
-    std::cout << "[!] Rule not found: " << ruleId << std::endl;
+    logger->log("[!] Rule not found: " + ruleId);
     return false;
 }
 
@@ -66,4 +83,47 @@ void RuleManager::listRules() const {
                   << " [" << rule.getAction() << "] "
                   << (rule.isEnabled() ? "[ENABLED]" : "[DISABLED]") << std::endl;
     }
+}
+
+// --- DPI Engine Integration Example ---
+void RuleManager::inspectPacket(const Packet& packet) {
+    if (dpiEngine->inspect(packet)) {
+        logger->log("[DPI] Suspicious packet detected.");
+        // Take action, e.g., drop or log
+    }
+}
+
+// --- Print Packet Info (Incoming/Outgoing) and Save to JSON ---
+void RuleManager::printPacketInfo(const Packet& pkt) const {
+    // Print to console
+    std::cout << (pkt.direction == Packet::Direction::IN ? "[IN]  " : "[OUT] ")
+              << pkt.srcIP << ":" << pkt.srcPort << " -> "
+              << pkt.dstIP << ":" << pkt.dstPort
+              << " | Proto: " << pkt.protocol << " | Size: " << pkt.size << " bytes"
+              << std::endl;
+
+    // Save to JSON file (append mode)
+    std::ofstream jsonFile("packets.json", std::ios::app);
+    if (jsonFile.is_open()) {
+        jsonFile << "{"
+                 << "\"direction\":\"" << (pkt.direction == Packet::Direction::IN ? "IN" : "OUT") << "\","
+                 << "\"srcIP\":\"" << pkt.srcIP << "\","
+                 << "\"srcPort\":" << pkt.srcPort << ","
+                 << "\"dstIP\":\"" << pkt.dstIP << "\","
+                 << "\"dstPort\":" << pkt.dstPort << ","
+                 << "\"protocol\":\"" << pkt.protocol << "\","
+                 << "\"size\":" << pkt.size
+                 << "}," << std::endl;
+        jsonFile.close();
+    }
+}
+
+// --- Packet Capture Integration Example ---
+void RuleManager::startPacketCapture(const std::string& iface) {
+    packetCapture->startCapture(iface, [this](const Packet& pkt) {
+        this->printPacketInfo(pkt); // Print and save incoming/outgoing packet info
+        this->inspectPacket(pkt);   // DPI
+        this->ruleEngine->applyRules(pkt, rules); // Apply rules
+        this->trafficShaper->shape(pkt); // Traffic shaping
+    });
 }
