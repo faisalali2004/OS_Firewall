@@ -10,6 +10,7 @@
 #include <QEventLoop>
 #include <QTimer>
 
+// --- CONSTRUCTOR / DESTRUCTOR ---
 RuleEngine::RuleEngine(QObject* parent, const QString& rulesPath)
     : QObject(parent), rulesPath(rulesPath), interactiveMode(false)
 {
@@ -17,6 +18,8 @@ RuleEngine::RuleEngine(QObject* parent, const QString& rulesPath)
 }
 
 RuleEngine::~RuleEngine() {}
+
+// --- INTERFACE ---
 
 void RuleEngine::setInteractiveMode(bool enabled) {
     QMutexLocker locker(&mutex);
@@ -170,7 +173,27 @@ QString RuleEngine::askUserForDecision(const PacketInfo& pkt) {
 }
 
 // --- SLOT IMPLEMENTATION REQUIRED BY QT ---
-void RuleEngine::userDecisionReceived(const QString& action) {
+void RuleEngine::userDecisionReceived(const QString& /*action*/) {
     // This slot is used to unblock the event loop in askUserForDecision.
     // No code needed here, but must exist for Qt's signal/slot system.
+}
+
+// --- REQUIRED FOR PACKET CAPTURE INTEGRATION ---
+bool RuleEngine::shouldBlock(const std::string& src_ip,
+                             const std::string& dst_ip,
+                             int src_port,
+                             int dst_port,
+                             const std::string& protocol,
+                             const unsigned char* /*payload*/,
+                             int /*payload_len*/)
+{
+    PacketInfo pkt;
+    pkt.srcIp = QString::fromStdString(src_ip);
+    pkt.dstIp = QString::fromStdString(dst_ip);
+    pkt.srcPort = QString::number(src_port);
+    pkt.dstPort = QString::number(dst_port);
+    pkt.protocol = QString::fromStdString(protocol);
+
+    QString action = decide(pkt);
+    return action == "block";
 }

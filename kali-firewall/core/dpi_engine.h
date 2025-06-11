@@ -7,23 +7,11 @@
 
 enum class DPIResult {
     Allow,
-    Block,
-    UNKNOWN,
-    HTTP,
-    DNS,
-    TLS,
-    SSH,
-    FTP,
-    SMTP,
-    QUIC,
-    NONE
+    Block
 };
 
 class DPIEngine {
 public:
-    DPIEngine();
-    ~DPIEngine();
-
     struct SignatureInfo {
         std::string name;
         std::string regex_str;
@@ -31,19 +19,24 @@ public:
         bool case_insensitive;
     };
 
-    // Returns true if added, false if duplicate
-    bool addSignature(const std::string& name, const std::string& regex_str, DPIResult result, bool case_insensitive = false);
-    // Returns true if removed, false if not found
-    bool removeSignature(const std::string& name);
-    // List all signatures with details
-    std::vector<SignatureInfo> listSignatures();
-    // Test payload, returns result and optionally matched signature name
-    DPIResult testPayload(const std::string& payload, std::string* matchedSig = nullptr);
+    DPIEngine();
+    ~DPIEngine();
 
-    // Inspect raw data buffer (for GUI integration)
+    bool addSignature(const std::string& name, const std::string& regex_str, DPIResult result, bool case_insensitive = false);
+    bool removeSignature(const std::string& name);
+    std::vector<SignatureInfo> listSignatures();
+
+    // Main DPI inspection interface
     DPIResult inspect(const uint8_t* data, size_t len, std::string& matchedSig);
 
-    static std::regex make_regex(const std::string& pattern, bool case_insensitive = false);
+    // For packet_capture.cpp integration
+    bool shouldBlock(const std::string& src_ip,
+                     const std::string& dst_ip,
+                     int src_port,
+                     int dst_port,
+                     const std::string& protocol,
+                     const unsigned char* payload,
+                     int payload_len);
 
 private:
     struct Signature {
@@ -53,6 +46,10 @@ private:
         std::string regex_str;
         bool case_insensitive;
     };
+
+    std::regex make_regex(const std::string& pattern, bool case_insensitive);
+    DPIResult testPayload(const std::string& payload, std::string* matchedSig);
+
     std::vector<Signature> signatures;
     std::mutex mutex_;
 };

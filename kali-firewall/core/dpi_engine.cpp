@@ -73,3 +73,22 @@ DPIResult DPIEngine::inspect(const uint8_t* data, size_t len, std::string& match
     std::string payload(reinterpret_cast<const char*>(data), len);
     return testPayload(payload, &matchedSig);
 }
+
+// --- REQUIRED FOR PACKET CAPTURE INTEGRATION ---
+bool DPIEngine::shouldBlock(const std::string& src_ip,
+                            const std::string& dst_ip,
+                            int src_port,
+                            int dst_port,
+                            const std::string& protocol,
+                            const unsigned char* payload,
+                            int payload_len)
+{
+    if (!payload || payload_len <= 0)
+        return false;
+
+    std::string matchedSig;
+    DPIResult result = inspect(payload, payload_len, matchedSig);
+
+    // Optionally, log or use matchedSig for more info
+    return result == DPIResult::Block;
+}
