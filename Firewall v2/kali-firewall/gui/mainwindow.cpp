@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "dpi_manager.h"
 #include <QMessageBox>
 #include <QIcon>
 

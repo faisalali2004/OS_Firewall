@@ -9,11 +9,12 @@
 #include "log_viewer.h"
 #include "rule_editor.h"
 #include "traffic_shaper_ui.h"
-#include "dpi_manager.h"
 #include "rule_engine.h"
 #include "packet_capture.h"
 #include "dpi_engine.h"
 #include "packet_info.h"
+
+class DPIManager; // <-- Forward declaration
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -43,7 +44,7 @@ private:
     LogViewer* logViewer;
     RuleEditor* ruleEditor;
     TrafficShaperUI* trafficShaperUI;
-    DPIManager* dpiManager; // <-- Fixed class name
+    DPIManager* dpiManager;
 
     QToolBar* navToolBar;
     QAction* dashboardAction;
