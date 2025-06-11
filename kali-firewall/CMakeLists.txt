@@ -1,78 +1,55 @@
-cmake_minimum_required(VERSION 3.10)
-project(kali-firewall)
+cmake_minimum_required(VERSION 3.16)
+project(kali-firewall LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# --- Qt5 Packages ---
+# Find Qt (change Qt5 to Qt6 if needed)
 find_package(Qt5 COMPONENTS Widgets Network REQUIRED)
-if(NOT Qt5Widgets_FOUND OR NOT Qt5Network_FOUND)
-    message(FATAL_ERROR "Qt5 Widgets and/or Network not found! Please install qtbase5-dev and qtbase5-dev-tools.")
-endif()
 
-# --- SQLite3 ---
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-if(NOT SQLITE3_FOUND)
-    message(FATAL_ERROR "sqlite3 not found! Please install libsqlite3-dev.")
-endif()
-
-# --- Netfilter Queue ---
-pkg_check_modules(NFQUEUE REQUIRED libnetfilter_queue)
-if(NOT NFQUEUE_FOUND)
-    message(FATAL_ERROR "libnetfilter_queue not found! Please install libnetfilter-queue-dev.")
-endif()
-
-# --- nlohmann-json (header-only) ---
-find_path(NLOHMANN_JSON_INCLUDE_DIR nlohmann/json.hpp)
-if(NOT NLOHMANN_JSON_INCLUDE_DIR)
-    message(FATAL_ERROR "nlohmann/json.hpp not found! Please install nlohmann-json3-dev.")
-endif()
-
-# --- Include Directories ---
+# Add include directories (root for MOC, core, gui)
 include_directories(
+    ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/core
     ${CMAKE_SOURCE_DIR}/gui
-    ${CMAKE_SOURCE_DIR}/process_monitor
-    ${NFQUEUE_INCLUDE_DIRS}
-    ${SQLITE3_INCLUDE_DIRS}
-    ${NLOHMANN_JSON_INCLUDE_DIR}
 )
 
-# --- Source Files ---
+# Gather all source and header files
+file(GLOB_RECURSE CORE_SOURCES ${CMAKE_SOURCE_DIR}/core/*.cpp)
+file(GLOB_RECURSE GUI_SOURCES ${CMAKE_SOURCE_DIR}/gui/*.cpp)
+file(GLOB_RECURSE HEADERS ${CMAKE_SOURCE_DIR}/core/*.h ${CMAKE_SOURCE_DIR}/gui/*.h)
+file(GLOB MAIN_SRC ${CMAKE_SOURCE_DIR}/main.cpp)
+
 add_executable(firewall
-    main.cpp
-    core/packet_capture.cpp
-    core/rule_engine.cpp
-    core/dpi_engine.cpp
-    core/traffic_shaper.cpp
-    core/logger.cpp
-    process_monitor/proc_tracker.cpp
-    gui/mainwindow.cpp
-    gui/dashboard.cpp
-    gui/log_viewer.cpp
-    gui/rule_editor.cpp
-    gui/traffic_shaper_ui.cpp
-    gui/dpi_manager.cpp
+    ${MAIN_SRC}
+    ${CORE_SOURCES}
+    ${GUI_SOURCES}
+    ${HEADERS}
 )
 
-# --- Link Libraries ---
+# Link libraries (Linux: sqlite3, netfilter_queue, nfnetlink)
 target_link_libraries(firewall
     Qt5::Widgets
     Qt5::Network
-    ${NFQUEUE_LIBRARIES}
-    ${SQLITE3_LIBRARIES}
+    sqlite3
+    netfilter_queue
+    nfnetlink
 )
 
-# --- Post-Build Messages ---
-message(STATUS "Qt5 include dirs: ${Qt5Widgets_INCLUDE_DIRS}")
-message(STATUS "NFQUEUE include dirs: ${NFQUEUE_INCLUDE_DIRS}")
-message(STATUS "SQLITE3 include dirs: ${SQLITE3_INCLUDE_DIRS}")
-message(STATUS "nlohmann-json include dir: ${NLOHMANN_JSON_INCLUDE_DIR}")
+# Platform-specific settings
+if (WIN32)
+    target_compile_definitions(firewall PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 
-message(STATUS "----------------------------------------------------------")
-message(STATUS "If you see a FATAL_ERROR above, install missing packages:")
-message(STATUS "sudo apt-get install qtbase5-dev qtbase5-dev-tools libsqlite3-dev libnetfilter-queue-dev nlohmann-json3-dev pkg-config")
-message(STATUS "----------------------------------------------------------")
+# Extra warnings and options
+if (MSVC)
+    target_compile_options(firewall PRIVATE /W4 /permissive-)
+else()
+    target_compile_options(firewall PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Install target (optional)
+install(TARGETS firewall DESTINATION bin)

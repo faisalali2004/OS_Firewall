@@ -7,6 +7,7 @@
 #include <QBrush>
 #include <QColor>
 #include <QFont>
+#include <algorithm>
 
 LogViewer::LogViewer(QWidget* parent)
     : QWidget(parent), currentPage(0), pageSize(50)
@@ -18,7 +19,6 @@ LogViewer::LogViewer(QWidget* parent)
     table->setColumnCount(8);
     table->setHorizontalHeaderLabels({"Time", "Src IP", "Src Port", "Dst IP", "Dst Port", "Protocol", "Action", "Info"});
     table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
-    table->horizontalHeader()->setSectionsClickable(true);
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSortingEnabled(true);
@@ -50,6 +50,11 @@ LogViewer::LogViewer(QWidget* parent)
 }
 
 void LogViewer::refreshLogs() {
+    int totalLogs = static_cast<int>(Logger::instance().getLogs().size());
+    int totalPages = (totalLogs + pageSize - 1) / pageSize;
+    if (totalPages == 0) totalPages = 1;
+    if (currentPage >= totalPages) currentPage = totalPages - 1;
+
     logs = Logger::instance().getLogs(currentPage * pageSize, pageSize);
 
     table->clearContents();
@@ -94,9 +99,9 @@ void LogViewer::refreshLogs() {
         placeholder->setForeground(QBrush(QColor(120, 120, 120)));
     }
 
-    pageLabel->setText(QString("Page %1").arg(currentPage + 1));
+    pageLabel->setText(QString("Page %1 of %2").arg(currentPage + 1).arg(totalPages));
     prevBtn->setEnabled(currentPage > 0);
-    nextBtn->setEnabled(static_cast<int>(logs.size()) == pageSize);
+    nextBtn->setEnabled(currentPage + 1 < totalPages);
 
     table->resizeColumnsToContents();
     table->resizeRowsToContents();

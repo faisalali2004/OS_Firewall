@@ -1,55 +1,58 @@
 #include "dpi_engine.h"
-#include <regex>
-#include <mutex>
 #include <algorithm>
-#include <iostream>
+#include <cstring>
+#include <iostream> // For error logging (replace with your logger if needed)
 
-DPIEngine::DPIEngine() {}
-
-DPIEngine::~DPIEngine() {}
+DPIEngine::DPIEngine() = default;
+DPIEngine::~DPIEngine() = default;
 
 std::regex DPIEngine::make_regex(const std::string& pattern, bool case_insensitive) {
-    try {
-        return std::regex(pattern, case_insensitive ? std::regex::icase : std::regex::ECMAScript);
-    } catch (const std::regex_error& e) {
-        std::cerr << "[DPIEngine] Invalid regex pattern: " << pattern << " (" << e.what() << ")" << std::endl;
-        // Fallback: match nothing
-        return std::regex("$a");
-    }
+    return std::regex(pattern, case_insensitive ? std::regex::icase : std::regex::ECMAScript);
 }
 
 bool DPIEngine::addSignature(const std::string& name, const std::string& regex_str, DPIResult result, bool case_insensitive) {
     std::lock_guard<std::mutex> lock(mutex_);
-    // Prevent duplicate signature names
+    // Prevent duplicate names
     auto it = std::find_if(signatures.begin(), signatures.end(),
-        [&](const Signature& sig) { return sig.name == name; });
-    if (it != signatures.end()) {
-        std::cerr << "[DPIEngine] Signature with name '" << name << "' already exists." << std::endl;
+        [&](const Signature& s) { return s.name == name; });
+    if (it != signatures.end()) return false;
+
+    try {
+        Signature sig;
+        sig.name = name;
+        sig.regex_str = regex_str;
+        sig.result = result;
+        sig.case_insensitive = case_insensitive;
+        sig.pattern = make_regex(regex_str, case_insensitive);
+        signatures.push_back(std::move(sig));
+        return true;
+    } catch (const std::regex_error& e) {
+        std::cerr << "DPIEngine: Invalid regex for signature '" << name << "': " << e.what() << std::endl;
         return false;
     }
-    Signature sig{name, make_regex(regex_str, case_insensitive), result, regex_str, case_insensitive};
-    signatures.push_back(sig);
-    return true;
 }
 
 bool DPIEngine::removeSignature(const std::string& name) {
     std::lock_guard<std::mutex> lock(mutex_);
-    auto old_size = signatures.size();
-    signatures.erase(
-        std::remove_if(signatures.begin(), signatures.end(),
-            [&](const Signature& sig) { return sig.name == name; }),
-        signatures.end()
-    );
-    return signatures.size() < old_size;
+    auto it = std::remove_if(signatures.begin(), signatures.end(),
+        [&](const Signature& s) { return s.name == name; });
+    if (it == signatures.end()) return false;
+    signatures.erase(it, signatures.end());
+    return true;
 }
 
 std::vector<DPIEngine::SignatureInfo> DPIEngine::listSignatures() {
     std::lock_guard<std::mutex> lock(mutex_);
     std::vector<SignatureInfo> infos;
     for (const auto& sig : signatures) {
-        infos.push_back({sig.name, sig.regex_str, sig.result, sig.case_insensitive});
+        infos.push_back(SignatureInfo{sig.name, sig.regex_str, sig.result, sig.case_insensitive});
     }
     return infos;
+}
+
+DPIResult DPIEngine::inspect(const uint8_t* data, size_t len, std::string& matchedSig) {
+    std::string payload(reinterpret_cast<const char*>(data), len);
+    return testPayload(payload, &matchedSig);
 }
 
 DPIResult DPIEngine::testPayload(const std::string& payload, std::string* matchedSig) {
@@ -61,34 +64,23 @@ DPIResult DPIEngine::testPayload(const std::string& payload, std::string* matche
                 return sig.result;
             }
         } catch (const std::regex_error& e) {
-            std::cerr << "[DPIEngine] Regex error for signature '" << sig.name << "': " << e.what() << std::endl;
+            std::cerr << "DPIEngine: Regex error in signature '" << sig.name << "': " << e.what() << std::endl;
             continue;
         }
     }
     if (matchedSig) *matchedSig = "";
-    return DPIResult::Allow;
+    return DPIResult::UNKNOWN;
 }
 
-DPIResult DPIEngine::inspect(const uint8_t* data, size_t len, std::string& matchedSig) {
-    std::string payload(reinterpret_cast<const char*>(data), len);
-    return testPayload(payload, &matchedSig);
-}
-
-// --- REQUIRED FOR PACKET CAPTURE INTEGRATION ---
 bool DPIEngine::shouldBlock(const std::string& src_ip,
                             const std::string& dst_ip,
                             int src_port,
                             int dst_port,
                             const std::string& protocol,
                             const unsigned char* payload,
-                            int payload_len)
-{
-    if (!payload || payload_len <= 0)
-        return false;
-
-    std::string matchedSig;
-    DPIResult result = inspect(payload, payload_len, matchedSig);
-
-    // Block if result is Block, or you can extend to block on other types if desired
-    return result == DPIResult::Block;
+                            int payload_len) {
+    (void)src_ip; (void)dst_ip; (void)src_port; (void)dst_port; (void)protocol; // suppress unused warnings
+    std::string matched;
+    DPIResult res = inspect(payload, payload_len, matched);
+    return res == DPIResult::Block;
 }

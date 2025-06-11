@@ -96,6 +96,13 @@ void DPImanager::onAddSignature() {
         return;
     }
 
+    // Validate regex
+    QRegularExpression re(regex, caseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption);
+    if (!re.isValid()) {
+        QMessageBox::warning(this, "Regex Error", "Invalid regular expression.");
+        return;
+    }
+
     DPIResult result = DPIResult::UNKNOWN;
     if      (resultStr == "Allow")  result = DPIResult::Allow;
     else if (resultStr == "Block")  result = DPIResult::Block;

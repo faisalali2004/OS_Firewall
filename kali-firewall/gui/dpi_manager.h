@@ -7,7 +7,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QTextEdit>
-#include "dpi_engine.h"
+#include "core/dpi_engine.h" // Use the core DPI engine and enums
 
 class DPImanager : public QWidget {
     Q_OBJECT
@@ -23,7 +23,6 @@ private slots:
 private:
     DPIEngine* dpiEngine;
 
-    // Signature management widgets
     QListWidget* sigList;
     QLineEdit* sigNameEdit;
     QLineEdit* sigRegexEdit;
@@ -32,7 +31,6 @@ private:
     QPushButton* addBtn;
     QPushButton* removeBtn;
 
-    // DPI test widgets
     QTextEdit* testPayloadEdit;
     QPushButton* testBtn;
     QLabel* testResultLabel;

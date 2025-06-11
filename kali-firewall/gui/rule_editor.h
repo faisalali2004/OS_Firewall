@@ -1,16 +1,25 @@
 #pragma once
+
 #include <QWidget>
 #include <QTableWidget>
 #include <QPushButton>
-#include <QJsonArray>
 #include <QLabel>
+#include <QJsonArray>
 
 class RuleEditor : public QWidget {
     Q_OBJECT
-
 public:
     explicit RuleEditor(QWidget* parent = nullptr);
     ~RuleEditor();
+
+    // Loads rules from a file
+    void loadRules(const QString& path);
+
+    // Saves rules to a file
+    void saveRules(const QString& path);
+
+    // Validates all rules in the table
+    bool validateAllRules() const;
 
 signals:
     void rulesChanged(const QJsonArray& rules);
@@ -22,8 +31,6 @@ private slots:
     void loadFromFile();
 
 private:
-    void loadRules(const QString& path);
-    void saveRules(const QString& path);
     void populateTable(const QJsonArray& rules);
     QJsonArray collectRules() const;
     void updateStatus(const QString& msg, bool error = false);

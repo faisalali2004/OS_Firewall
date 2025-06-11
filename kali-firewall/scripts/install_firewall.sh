@@ -1,51 +1,60 @@
 #!/bin/bash
+# filepath: c:\Users\faisa\OneDrive\Documents\Semester 4\Operating Systems Lab\firewall_working\kali-firewall\scripts\install_firewall.sh
 
 set -e
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}==== Kali Firewall Installer ====${NC}"
 
-# List of required packages
-REQUIRED_PKGS=(build-essential cmake qtbase5-dev qtbase5-dev-tools libsqlite3-dev libnetfilter-queue-dev nlohmann-json3-dev pkg-config)
+# Root check
+if [[ $EUID -ne 0 ]]; then
+    echo -e "${RED}[!] Please run this script as root (sudo $0)${NC}"
+    exit 1
+fi
 
-# List of required scripts
+# Detect package manager
+if command -v apt-get &>/dev/null; then
+    PKG="apt-get"
+    PKG_INSTALL="apt-get install -y"
+    PKG_CHECK="dpkg -s"
+elif command -v dnf &>/dev/null; then
+    PKG="dnf"
+    PKG_INSTALL="dnf install -y"
+    PKG_CHECK="rpm -q"
+elif command -v pacman &>/dev/null; then
+    PKG="pacman"
+    PKG_INSTALL="pacman -Syu --noconfirm"
+    PKG_CHECK="pacman -Qi"
+else
+    echo -e "${RED}[!] No supported package manager found (apt, dnf, pacman).${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}[*] Using package manager: $PKG${NC}"
+
+REQUIRED_PKGS=(build-essential cmake qtbase5-dev qtbase5-dev-tools libsqlite3-dev libnetfilter-queue-dev nlohmann-json3-dev pkg-config iptables)
 REQUIRED_SCRIPTS=(setup_iptables.sh start_firewall.sh stop_firewall.sh)
 
-check_and_install_packages() {
-    echo "[*] Checking required packages..."
-    MISSING_PKGS=()
-    for pkg in "${REQUIRED_PKGS[@]}"; do
-        if ! dpkg -s "$pkg" &>/dev/null; then
-            MISSING_PKGS+=("$pkg")
-        else
-            echo "[*] $pkg already installed."
-        fi
-    done
-
-    if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
-        echo -e "${RED}[!] Missing packages: ${MISSING_PKGS[*]}${NC}"
-        echo "[*] Installing missing packages..."
-        sudo apt-get update
-        sudo apt-get install -y "${MISSING_PKGS[@]}"
+# Check and install packages
+echo "[*] Checking required packages..."
+MISSING_PKGS=()
+for pkg in "${REQUIRED_PKGS[@]}"; do
+    if ! $PKG_CHECK "$pkg" &>/dev/null; then
+        MISSING_PKGS+=("$pkg")
+    else
+        echo "[*] $pkg already installed."
     fi
-}
+done
 
-check_and_chmod_scripts() {
-    echo "[*] Checking script permissions..."
-    for script in "${REQUIRED_SCRIPTS[@]}"; do
-        if [ ! -f "./$script" ]; then
-            echo -e "${RED}[!] Required script $script not found in $(pwd). Exiting.${NC}"
-            exit 1
-        fi
-        if [ ! -x "./$script" ]; then
-            echo "[*] Setting executable permission for $script"
-            chmod +x "./$script"
-        fi
-    done
-}
+if [ ${#MISSING_PKGS[@]} -ne 0 ]; then
+    echo -e "${YELLOW}[!] Missing packages: ${MISSING_PKGS[*]}${NC}"
+    echo "[*] Installing missing packages..."
+    $PKG_INSTALL "${MISSING_PKGS[@]}"
+fi
 
 # Ensure we are in the scripts directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -55,47 +64,59 @@ cd "$SCRIPT_DIR"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_ROOT"
 
-# Step 1: Check and install packages
-check_and_install_packages
+# Check and chmod scripts
+echo "[*] Checking script permissions..."
+for script in "${REQUIRED_SCRIPTS[@]}"; do
+    if [ ! -f "./scripts/$script" ]; then
+        echo -e "${RED}[!] Required script $script not found in ./scripts. Exiting.${NC}"
+        exit 1
+    fi
+    if [ ! -x "./scripts/$script" ]; then
+        echo "[*] Setting executable permission for $script"
+        chmod +x "./scripts/$script"
+    fi
+done
 
-# Step 2: Check and chmod scripts
-cd "$SCRIPT_DIR"
-check_and_chmod_scripts
-
-# Step 3: Build the firewall
+# Build the firewall
 echo "[*] Building the firewall..."
-cd "$PROJECT_ROOT"
 if [ ! -d build ]; then
     mkdir build
 fi
 cd build
-cmake .. || { echo -e "${RED}[!] CMake configuration failed. Exiting.${NC}"; exit 1; }
-make || { echo -e "${RED}[!] Build failed. Exiting.${NC}"; exit 1; }
+if [ ! -f Makefile ] || [ "$(find .. -name '*.cpp' -newer Makefile | wc -l)" -gt 0 ]; then
+    cmake .. || { echo -e "${RED}[!] CMake configuration failed. Exiting.${NC}"; exit 1; }
+fi
+make -j"$(nproc)" || { echo -e "${RED}[!] Build failed. Exiting.${NC}"; exit 1; }
+cd "$PROJECT_ROOT"
 
-# Step 4: Verify binary
-if [ ! -f firewall ]; then
+# Verify binary
+if [ ! -f build/firewall ]; then
     echo -e "${RED}[!] Firewall binary not found after build. Exiting.${NC}"
     exit 1
 fi
 
-# Step 4.5: Ensure logs directory and log file exist
-cd "$PROJECT_ROOT"
+# Ensure logs directory and SQLite DB file exist
 if [ ! -d logs ]; then
     echo "[*] Creating logs directory..."
     mkdir logs
     chmod 755 logs
 fi
 
-if [ ! -f logs/firewall_log.json ]; then
-    echo "[*] Creating empty log file logs/firewall_log.json..."
-    echo "[]" > logs/firewall_log.json
-    chmod 644 logs/firewall_log.json
+if [ ! -f logs/firewall_log.db ]; then
+    echo "[*] Creating empty SQLite log file logs/firewall_log.db..."
+    sqlite3 logs/firewall_log.db "VACUUM;"
+    chmod 644 logs/firewall_log.db
 fi
 
-# Step 5: Setup iptables rules
-cd "$SCRIPT_DIR"
+# Check iptables is available
+if ! command -v iptables &>/dev/null; then
+    echo -e "${RED}[!] iptables not found. Please install it and rerun this script.${NC}"
+    exit 1
+fi
+
+# Setup iptables rules
 echo "[*] Setting up iptables rules for NFQUEUE..."
-if sudo ./setup_iptables.sh; then
+if ./scripts/setup_iptables.sh; then
     echo -e "${GREEN}[*] iptables rules set up successfully.${NC}"
 else
     echo -e "${RED}[!] Failed to set up iptables rules. Exiting.${NC}"
@@ -103,9 +124,9 @@ else
 fi
 
 echo -e "${GREEN}==== Installation Complete! ====${NC}"
-echo "You can now use start_firewall.sh and stop_firewall.sh to control the firewall."
+echo "You can now use ./scripts/start_firewall.sh and ./scripts/stop_firewall.sh to control the firewall."
 
-# Optional: Prompt to run the firewall now
+# Prompt to run the firewall now
 read -p "Do you want to start the firewall now? [y/N]: " yn
 case $yn in
     [Yy]* )
@@ -116,20 +137,20 @@ case $yn in
             mkdir -p "$XDG_RUNTIME_DIR"
             chmod 700 "$XDG_RUNTIME_DIR"
         fi
-        ./start_firewall.sh &
+        ./scripts/start_firewall.sh &
         FW_PID=$!
         sleep 2
         read -p "Firewall is running (PID $FW_PID). Do you want to terminate it now? [y/N]: " killnow
         case $killnow in
             [Yy]* )
-                ./stop_firewall.sh
+                ./scripts/stop_firewall.sh
                 ;;
             * )
-                echo "Firewall will keep running. Use ./stop_firewall.sh to stop it later."
+                echo "Firewall will keep running. Use ./scripts/stop_firewall.sh to stop it later."
                 ;;
         esac
         ;;
     * )
-        echo "You can start it later with ./start_firewall.sh"
+        echo "You can start it later with ./scripts/start_firewall.sh"
         ;;
 esac

@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QMessageBox>
 #include <QNetworkInterface>
+#include <QRegularExpression>
 
 RuleEditor::RuleEditor(QWidget* parent)
     : QWidget(parent),
@@ -71,6 +72,10 @@ void RuleEditor::removeSelectedRule() {
 void RuleEditor::saveToFile() {
     QString path = QFileDialog::getSaveFileName(this, "Save Rules", rulesPath, "JSON Files (*.json)");
     if (path.isEmpty()) return;
+    if (!validateAllRules()) {
+        QMessageBox::warning(this, "Validation Error", "Please correct invalid rule entries before saving.");
+        return;
+    }
     saveRules(path);
 }
 
@@ -144,6 +149,32 @@ QJsonArray RuleEditor::collectRules() const {
         arr.append(obj);
     }
     return arr;
+}
+
+bool RuleEditor::validateAllRules() const {
+    QRegularExpression ipRegex(R"(^(\*|(\d{1,3}\.){3}\d{1,3})$)");
+    QStringList validActions = {"Allow", "Block", "Log", "Drop"};
+    for (int row = 0; row < table->rowCount(); ++row) {
+        QString src_ip = table->item(row, 0) ? table->item(row, 0)->text() : "";
+        QString dst_ip = table->item(row, 1) ? table->item(row, 1)->text() : "";
+        QString src_port = table->item(row, 2) ? table->item(row, 2)->text() : "";
+        QString dst_port = table->item(row, 3) ? table->item(row, 3)->text() : "";
+        QString action = table->item(row, 4) ? table->item(row, 4)->text() : "";
+
+        if (!ipRegex.match(src_ip).hasMatch() || !ipRegex.match(dst_ip).hasMatch()) {
+            return false;
+        }
+        bool ok1, ok2;
+        int sp = src_port.toInt(&ok1);
+        int dp = dst_port.toInt(&ok2);
+        if (!ok1 || !ok2 || sp < 0 || sp > 65535 || dp < 0 || dp > 65535) {
+            return false;
+        }
+        if (!validActions.contains(action, Qt::CaseInsensitive)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void RuleEditor::updateStatus(const QString& msg, bool error) {
