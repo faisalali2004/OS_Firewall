@@ -23,8 +23,11 @@ file(GLOB SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
 add_executable(cpp-cli-firewall ${SOURCES})
 
 # Link with pcap (required for packet capture)
-find_package(PCAP REQUIRED)
-target_link_libraries(cpp-cli-firewall PRIVATE ${PCAP_LIBRARY})
+find_library(PCAP_LIB pcap)
+if(NOT PCAP_LIB)
+    message(FATAL_ERROR "libpcap not found")
+endif()
+target_link_libraries(cpp-cli-firewall PRIVATE ${PCAP_LIB})
 
 # For Linux, also link pthread if needed
 if(UNIX AND NOT APPLE)
