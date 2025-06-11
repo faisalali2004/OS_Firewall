@@ -4,7 +4,16 @@
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
+#include <net/ethernet.h>
 #include <arpa/inet.h>
+#include <pcap/pcap.h>
+
+#ifndef DLT_LINUX_SLL
+#define DLT_LINUX_SLL 113
+#endif
+#ifndef DLT_NULL
+#define DLT_NULL 0
+#endif
 
 PacketCapture::PacketCapture() : running(false), handle(nullptr) {}
 
@@ -30,6 +39,8 @@ void PacketCapture::startCapture(const std::string& iface, std::function<void(co
             return;
         }
         handle = pcap_handle;
+        int dlt = pcap_datalink(pcap_handle);
+
         while (running) {
             struct pcap_pkthdr* header = nullptr;
             const u_char* data = nullptr;
@@ -40,29 +51,56 @@ void PacketCapture::startCapture(const std::string& iface, std::function<void(co
                 pkt.length = header->len;
                 pkt.data.assign(data, data + header->len);
                 pkt.size = header->len;
+                pkt.srcPort = 0;
+                pkt.dstPort = 0;
+                pkt.protocol = "";
+                pkt.srcIP = "";
+                pkt.dstIP = "";
 
-                // Parse Ethernet, IPv4, TCP/UDP headers
-                if (header->len > 14) {
-                    const uint8_t* ipData = data + 14;
-                    struct ip* iph = (struct ip*)ipData;
+                // --- Layer 2 offset detection ---
+                size_t l2_offset = 0;
+                if (dlt == DLT_EN10MB) {
+                    l2_offset = sizeof(struct ether_header);
+                } else if (dlt == DLT_LINUX_SLL) {
+                    l2_offset = 16;
+                } else if (dlt == DLT_NULL) {
+                    l2_offset = 4;
+                } else {
+                    pkt.protocol = "UNKNOWN-L2";
+                    callback(pkt);
+                    continue;
+                }
+
+                // --- IPv4 parsing ---
+                if (header->len >= l2_offset + sizeof(struct ip)) {
+                    const struct ip* iph = (const struct ip*)(data + l2_offset);
                     if (iph->ip_v == 4) {
-                        pkt.srcIP = inet_ntoa(iph->ip_src);
-                        pkt.dstIP = inet_ntoa(iph->ip_dst);
+                        char srcbuf[INET_ADDRSTRLEN] = {0};
+                        char dstbuf[INET_ADDRSTRLEN] = {0};
+                        inet_ntop(AF_INET, &(iph->ip_src), srcbuf, INET_ADDRSTRLEN);
+                        inet_ntop(AF_INET, &(iph->ip_dst), dstbuf, INET_ADDRSTRLEN);
+                        pkt.srcIP = srcbuf;
+                        pkt.dstIP = dstbuf;
+
                         // TCP or UDP
-                        if (iph->ip_p == IPPROTO_TCP && header->len > 14 + iph->ip_hl*4 + 4) {
-                            struct tcphdr* tcph = (struct tcphdr*)(ipData + iph->ip_hl*4);
+                        if (iph->ip_p == IPPROTO_TCP && header->len >= l2_offset + iph->ip_hl*4 + sizeof(struct tcphdr)) {
+                            const struct tcphdr* tcph = (const struct tcphdr*)((const uint8_t*)iph + iph->ip_hl*4);
                             pkt.srcPort = ntohs(tcph->th_sport);
                             pkt.dstPort = ntohs(tcph->th_dport);
                             pkt.protocol = "TCP";
-                        } else if (iph->ip_p == IPPROTO_UDP && header->len > 14 + iph->ip_hl*4 + 4) {
-                            struct udphdr* udph = (struct udphdr*)(ipData + iph->ip_hl*4);
+                        } else if (iph->ip_p == IPPROTO_UDP && header->len >= l2_offset + iph->ip_hl*4 + sizeof(struct udphdr)) {
+                            const struct udphdr* udph = (const struct udphdr*)((const uint8_t*)iph + iph->ip_hl*4);
                             pkt.srcPort = ntohs(udph->uh_sport);
                             pkt.dstPort = ntohs(udph->uh_dport);
                             pkt.protocol = "UDP";
                         } else {
                             pkt.protocol = std::to_string(iph->ip_p);
                         }
+                    } else {
+                        pkt.protocol = "NON-IPv4";
                     }
+                } else {
+                    pkt.protocol = "TOO-SHORT";
                 }
 
                 try {

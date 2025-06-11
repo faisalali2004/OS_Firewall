@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <sstream>
 #include "firewall.h"
@@ -13,8 +14,29 @@ void displayUsage() {
               << "  add <id>,<desc>,<action>,<enabled>                            Add a rule\n"
               << "  remove <id>                                                   Remove rule by ID\n"
               << "  showlogs                                                      Show firewall logs\n"
+              << "  showpackets                                                   Show captured packets\n"
+              << "  clearpackets                                                  Clear captured packets log\n"
               << "  interactive                                                   Enter interactive shell\n"
               << std::endl;
+}
+
+void showPackets() {
+    std::ifstream log("packets.log");
+    if (!log.is_open()) {
+        std::cout << "No packets captured yet." << std::endl;
+    } else {
+        std::cout << "=== Captured Packets ===" << std::endl;
+        std::string line;
+        while (std::getline(log, line)) {
+            std::cout << line << std::endl;
+        }
+    }
+}
+
+void clearPackets() {
+    std::ofstream ofs("packets.log", std::ofstream::trunc);
+    ofs.close();
+    std::cout << "Captured packets log cleared." << std::endl;
 }
 
 void interactiveShell(Firewall& firewall) {
@@ -55,6 +77,12 @@ void interactiveShell(Firewall& firewall) {
         }
         else if (cmd == "showlogs") {
             firewall.showLogs();
+        }
+        else if (cmd == "showpackets") {
+            showPackets();
+        }
+        else if (cmd == "clearpackets") {
+            clearPackets();
         }
         else if (cmd == "dpi") {
             std::string opt; iss >> opt;
@@ -139,6 +167,16 @@ int main(int argc, char* argv[]) {
 
     if (command == "showlogs") {
         firewall.showLogs();
+        return 0;
+    }
+
+    if (command == "showpackets") {
+        showPackets();
+        return 0;
+    }
+
+    if (command == "clearpackets") {
+        clearPackets();
         return 0;
     }
 

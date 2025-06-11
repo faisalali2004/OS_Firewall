@@ -1,6 +1,3 @@
-#ifndef RULES_H
-#define RULES_H
-
 #include "rules.h"
 #include "dpi_engine.h"
 #include "logger.h"
@@ -14,30 +11,47 @@
 
 // --- Rule Implementation ---
 
-Rule::Rule() : enabled(true) {}
+Rule::Rule()
+    : srcPort(0), dstPort(0), enabled(true) {}
 
-Rule::Rule(const std::string& id, const std::string& desc, const std::string& action, bool enabled)
-    : id(id), description(desc), action(action), enabled(enabled) {}
+Rule::Rule(const std::string& id, const std::string& desc, const std::string& action,
+           const std::string& protocol, const std::string& srcIP, const std::string& dstIP,
+           uint16_t srcPort, uint16_t dstPort, bool enabled)
+    : id(id), description(desc), action(action), protocol(protocol), srcIP(srcIP), dstIP(dstIP),
+      srcPort(srcPort), dstPort(dstPort), enabled(enabled) {}
 
 std::string Rule::getId() const { return id; }
 std::string Rule::getDescription() const { return description; }
 std::string Rule::getAction() const { return action; }
+std::string Rule::getProtocol() const { return protocol; }
+std::string Rule::getSrcIP() const { return srcIP; }
+std::string Rule::getDstIP() const { return dstIP; }
+uint16_t Rule::getSrcPort() const { return srcPort; }
+uint16_t Rule::getDstPort() const { return dstPort; }
 bool Rule::isEnabled() const { return enabled; }
 void Rule::setEnabled(bool en) { enabled = en; }
 
 std::string Rule::serialize() const {
     std::ostringstream oss;
-    oss << id << "," << description << "," << action << "," << (enabled ? "1" : "0");
+    oss << id << "," << description << "," << action << "," << protocol << "," << srcIP << "," << dstIP << ","
+        << srcPort << "," << dstPort << "," << (enabled ? "1" : "0");
     return oss.str();
 }
 
 bool Rule::deserialize(const std::string& str) {
     std::istringstream iss(str);
+    std::string srcPortStr, dstPortStr, enabledStr;
     std::getline(iss, id, ',');
     std::getline(iss, description, ',');
     std::getline(iss, action, ',');
-    std::string enabledStr;
+    std::getline(iss, protocol, ',');
+    std::getline(iss, srcIP, ',');
+    std::getline(iss, dstIP, ',');
+    std::getline(iss, srcPortStr, ',');
+    std::getline(iss, dstPortStr, ',');
     std::getline(iss, enabledStr, ',');
+    srcPort = static_cast<uint16_t>(srcPortStr.empty() ? 0 : std::stoi(srcPortStr));
+    dstPort = static_cast<uint16_t>(dstPortStr.empty() ? 0 : std::stoi(dstPortStr));
     enabled = (enabledStr == "1" || enabledStr == "true");
     return !id.empty() && !action.empty();
 }
@@ -94,44 +108,41 @@ void RuleManager::listRules() const {
 void RuleManager::inspectPacket(const Packet& packet) {
     if (dpiEngine->inspect(packet)) {
         logger->log("[DPI] Suspicious packet detected.");
-        // Optionally take action, e.g., drop or log
     }
 }
 
+// --- LOG PACKETS TO FILE ---
 void RuleManager::printPacketInfo(const Packet& pkt) const {
-    // Print to console
-    std::cout << (pkt.direction == Direction::IN ? "[IN]  " : "[OUT] ")
-              << pkt.srcIP << ":" << pkt.srcPort << " -> "
-              << pkt.dstIP << ":" << pkt.dstPort
-              << " | Proto: " << pkt.protocol << " | Size: " << pkt.size << " bytes"
-              << std::endl;
-
-    // Save to JSON file (append mode)
-    std::ofstream jsonFile("packets.json", std::ios::app);
-    if (jsonFile.is_open()) {
-        jsonFile << "{"
-                 << "\"direction\":\"" << (pkt.direction == Direction::IN ? "IN" : "OUT") << "\","
-                 << "\"srcIP\":\"" << pkt.srcIP << "\","
-                 << "\"srcPort\":" << pkt.srcPort << ","
-                 << "\"dstIP\":\"" << pkt.dstIP << "\","
-                 << "\"dstPort\":" << pkt.dstPort << ","
-                 << "\"protocol\":\"" << pkt.protocol << "\","
-                 << "\"size\":" << pkt.size
-                 << "}," << std::endl;
-        jsonFile.close();
+    std::ofstream log("packets.log", std::ios::app);
+    if (!log.is_open()) {
+        std::cerr << "[!] Could not open packets.log for writing!" << std::endl;
+        return;
     }
+    log << (pkt.direction == Direction::IN ? "[IN]  " : "[OUT] ")
+        << pkt.srcIP << ":" << pkt.srcPort << " -> "
+        << pkt.dstIP << ":" << pkt.dstPort
+        << " | Proto: " << pkt.protocol
+        << " | Size: " << pkt.size << " bytes"
+        << std::endl;
+    // Optionally, also print to console if you want:
+    // std::cout << (pkt.direction == Direction::IN ? "[IN]  " : "[OUT] ")
+    //           << pkt.srcIP << ":" << pkt.srcPort << " -> "
+    //           << pkt.dstIP << ":" << pkt.dstPort
+    //           << " | Proto: " << pkt.protocol
+    //           << " | Size: " << pkt.size << " bytes"
+    //           << std::endl;
 }
 
 void RuleManager::startPacketCapture(const std::string& iface) {
     if (!packetCapture) packetCapture = new PacketCapture();
     packetCapture->startCapture(iface, [this](const Packet& pkt) {
-        this->printPacketInfo(pkt); // Print and save incoming/outgoing packet info
-        this->inspectPacket(pkt);   // DPI
+        this->printPacketInfo(pkt);
+        this->inspectPacket(pkt);
         if (!this->ruleEngine->applyRules(pkt, rules)) {
             logger->log("[RuleEngine] Packet blocked by rule.");
             return;
         }
-        this->trafficShaper->shape(pkt); // Traffic shaping
+        this->trafficShaper->shape(pkt);
         // Forward/process packet as needed
     });
 }
@@ -169,4 +180,3 @@ void RuleManager::saveRules(const std::string& filename) const {
     }
     logger->log("Rules saved to disk.");
 }
-#endif 

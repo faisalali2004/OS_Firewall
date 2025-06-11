@@ -15,11 +15,18 @@ class TrafficShaper;
 class Rule {
 public:
     Rule();
-    Rule(const std::string& id, const std::string& desc, const std::string& action, bool enabled = true);
+    Rule(const std::string& id, const std::string& desc, const std::string& action,
+         const std::string& protocol = "", const std::string& srcIP = "", const std::string& dstIP = "",
+         uint16_t srcPort = 0, uint16_t dstPort = 0, bool enabled = true);
 
     std::string getId() const;
     std::string getDescription() const;
     std::string getAction() const;
+    std::string getProtocol() const;
+    std::string getSrcIP() const;
+    std::string getDstIP() const;
+    uint16_t getSrcPort() const;
+    uint16_t getDstPort() const;
     bool isEnabled() const;
 
     void setEnabled(bool en);
@@ -31,6 +38,11 @@ private:
     std::string id;
     std::string description;
     std::string action;
+    std::string protocol;
+    std::string srcIP;
+    std::string dstIP;
+    uint16_t srcPort;
+    uint16_t dstPort;
     bool enabled;
 };
 
@@ -43,7 +55,6 @@ public:
     bool removeRuleById(const std::string& ruleId);
     void listRules() const;
 
-    // Advanced packet and engine integration
     void inspectPacket(const Packet& packet);
     void printPacketInfo(const Packet& pkt) const;
     void startPacketCapture(const std::string& iface);
@@ -52,7 +63,6 @@ public:
     void loadRules(const std::string& filename);
     void saveRules(const std::string& filename) const;
 
-    // Access to rules for RuleEngine
     const std::vector<Rule>& getRules() const { return rules; }
 
 private:
