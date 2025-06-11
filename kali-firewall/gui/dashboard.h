@@ -1,61 +1,48 @@
 #pragma once
 
-#include <QMainWindow>
-#include <QStackedWidget>
-#include <QToolBar>
-#include <QAction>
-#include <QToolButton>
+#include <QWidget>
+#include <QLabel>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QTimer>
+#include "logger.h"
 
-// Forward declarations to avoid circular includes
-class Dashboard;
-class LogViewer;
-class RuleEditor;
-class TrafficShaperUI;
-class DPImanager;
-class RuleEngine;
-class PacketCapture;
-class DPIEngine;
-struct PacketInfo;
-
-class MainWindow : public QMainWindow {
+class Dashboard : public QWidget {
     Q_OBJECT
-
 public:
-    explicit MainWindow(QWidget* parent = nullptr);
-    ~MainWindow();
+    explicit Dashboard(Logger* logger, QWidget* parent = nullptr);
+    ~Dashboard();
+
+signals:
+    void openLogViewer();
+    void openRuleEditor();
+    void openTrafficShaper();
+    void openDPIManager();
+
+public slots:
+    // Called by MainWindow to update real-time firewall stats
+    void setStats(int total, int blocked, int memoryKB);
 
 private slots:
-    void showDashboard();
-    void showLogViewer();
-    void showRuleEditor();
-    void showTrafficShaper();
-    void showDPIManager();
-
-    void onUserDecisionNeeded(const PacketInfo& pkt);
-    void onInteractiveModeToggled(bool checked);
-
-    void updateStatsDisplay(int total, int blocked, int memoryKB);
+    // Periodically updates system stats (CPU/memory) for display
+    void updateStats();
 
 private:
-    void setupNavigation();
-    void setupConnections();
+    void setupUI();
 
-    QStackedWidget* stackedWidget;
-    Dashboard* dashboard;
-    LogViewer* logViewer;
-    RuleEditor* ruleEditor;
-    TrafficShaperUI* trafficShaperUI;
-    DPImanager* dpiManager;
+    Logger* logger;
+    QLabel* statusLabel;
+    QLabel* trafficLabel;
+    QLabel* blockedLabel;
+    QLabel* memoryLabel;
+    QProgressBar* cpuBar;
+    QProgressBar* memBar;
+    QTimer* statsTimer;
+    QPushButton* logBtn;
+    QPushButton* ruleBtn;
+    QPushButton* shaperBtn;
+    QPushButton* dpiBtn;
 
-    QToolBar* navToolBar;
-    QAction* dashboardAction;
-    QAction* logAction;
-    QAction* ruleAction;
-    QAction* shaperAction;
-    QAction* dpiAction;
-    QToolButton* interactiveModeButton;
-
-    RuleEngine* ruleEngine;
-    PacketCapture* packetCapture;
-    DPIEngine* dpiEngine;
+    int getCpuUsage();
+    int getMemUsage();
 };
