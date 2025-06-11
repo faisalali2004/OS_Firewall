@@ -3,12 +3,10 @@
 #include <thread>
 #include <mutex>
 #include <vector>
-#include <linux/netfilter.h>
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include "rule_engine.h"
 #include "dpi_engine.h"
 
-// Optional: define a handler type if you use custom handlers
 using PacketHandler = int(*)(struct nfq_q_handle*, struct nfgenmsg*, struct nfq_data*, void*);
 
 class PacketCapture {

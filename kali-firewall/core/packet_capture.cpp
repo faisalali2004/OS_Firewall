@@ -7,11 +7,11 @@
 #include <csignal>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <linux/netfilter.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <ctime>
+#include <linux/netfilter.h> // For NF_DROP, NF_ACCEPT
 
 namespace {
 constexpr size_t DEFAULT_BUF_SIZE = 0x10000; // 64KB
@@ -129,7 +129,7 @@ void PacketCapture::stop() {
 int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, struct nfq_data* nfa, void* data) {
     PacketCapture* self = static_cast<PacketCapture*>(data);
     if (self && self->userHandler)
-        return self->userHandler(qh, nullptr, nfa);
+        return self->userHandler(qh, nullptr, nfa, data); // Pass all 4 arguments
 
     uint32_t id = 0;
     struct nfqnl_msg_packet_hdr* ph = nfq_get_msg_packet_hdr(nfa);
@@ -165,7 +165,7 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, s
     // --- RuleEngine and DPIEngine integration ---
     bool shouldBlock = false;
     if (self) {
-        if (self->ruleEngine && self->ruleEngine->shouldBlock(src_ip, dst_ip, src_port, dst_port, protocol)) {
+        if (self->ruleEngine && self->ruleEngine->shouldBlock(src_ip, dst_ip, src_port, dst_port, protocol, pktData, len)) {
             shouldBlock = true;
             info = "Blocked by RuleEngine";
         }
