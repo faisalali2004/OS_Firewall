@@ -1,17 +1,16 @@
 #pragma once
-#include "logger.h"
-#include <QWidget>
 
-class Logger;
-class QTableWidget;
-class QLineEdit;
-class QPushButton;
-class QLabel;
+#include <QWidget>
+#include <QTableWidget>
+#include <QPushButton>
+#include <QLabel>
+#include <vector>
+#include "logger.h"
 
 class LogViewer : public QWidget {
     Q_OBJECT
 public:
-    explicit LogViewer(Logger* logger, QWidget* parent = nullptr);
+    explicit LogViewer(QWidget* parent = nullptr);
 
 private slots:
     void refreshLogs();
@@ -20,14 +19,13 @@ private slots:
     void onNextPage();
 
 private:
-    Logger* logger;
     QTableWidget* table;
-    QLineEdit* searchEdit;
-    QPushButton* refreshBtn;
-    QPushButton* clearBtn;
     QPushButton* prevBtn;
     QPushButton* nextBtn;
+    QPushButton* clearBtn;
     QLabel* pageLabel;
+
     int currentPage;
     int pageSize;
+    std::vector<Logger::LogEntry> logs;
 };
