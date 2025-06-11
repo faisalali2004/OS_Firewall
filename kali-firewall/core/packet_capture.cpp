@@ -1,4 +1,6 @@
 #include "packet_capture.h"
+#include "rule_engine.h"
+#include "dpi_engine.h"
 #include "logger.h"
 #include <iostream>
 #include <cstring>

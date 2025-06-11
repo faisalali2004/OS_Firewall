@@ -88,7 +88,6 @@ MainWindow::~MainWindow() {
     packetCapture->stop();
     delete packetCapture;
     delete dpiEngine;
-    delete ui;
 }
 
 void MainWindow::setupNavigation() {
