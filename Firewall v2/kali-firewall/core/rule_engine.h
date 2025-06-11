@@ -5,15 +5,7 @@
 #include <QList>
 #include <QMutex>
 #include <QMutexLocker>
-
-// Structure for packet info
-struct PacketInfo {
-    QString srcIp;
-    QString dstIp;
-    QString srcPort;
-    QString dstPort;
-    QString protocol;
-};
+#include "packet_info.h"
 
 // Structure for a firewall rule
 struct Rule {

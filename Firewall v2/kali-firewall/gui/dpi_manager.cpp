@@ -1,21 +1,13 @@
 #include "dpi_manager.h"
-#include "dpi_engine.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
-#include <QPushButton>
-#include <QLineEdit>
-#include <QComboBox>
-#include <QLabel>
-#include <QListWidget>
 #include <QMessageBox>
-#include <QByteArray>
-#include <QTextEdit>
 #include <QRegularExpression>
 #include <QGroupBox>
 #include <QHeaderView>
 
-DPImanager::DPImanager(QWidget* parent)
+DPIManager::DPIManager(QWidget* parent)
     : QWidget(parent),
       dpiEngine(new DPIEngine())
 {
@@ -67,14 +59,18 @@ DPImanager::DPImanager(QWidget* parent)
     mainLayout->addLayout(testLayout);
 
     // --- Connections ---
-    connect(addBtn, &QPushButton::clicked, this, &DPImanager::onAddSignature);
-    connect(removeBtn, &QPushButton::clicked, this, &DPImanager::onRemoveSignature);
-    connect(testBtn, &QPushButton::clicked, this, &DPImanager::onTestDPI);
+    connect(addBtn, &QPushButton::clicked, this, &DPIManager::onAddSignature);
+    connect(removeBtn, &QPushButton::clicked, this, &DPIManager::onRemoveSignature);
+    connect(testBtn, &QPushButton::clicked, this, &DPIManager::onTestDPI);
 
     setLayout(mainLayout);
 }
 
-void DPImanager::refreshSignatureList() {
+DPIManager::~DPIManager() {
+    delete dpiEngine;
+}
+
+void DPIManager::refreshSignatureList() {
     sigList->clear();
     for (const auto& info : dpiEngine->listSignatures()) {
         QString display = QString("%1 [%2] %3")
@@ -85,7 +81,7 @@ void DPImanager::refreshSignatureList() {
     }
 }
 
-void DPImanager::onAddSignature() {
+void DPIManager::onAddSignature() {
     QString name = sigNameEdit->text().trimmed();
     QString regex = sigRegexEdit->text().trimmed();
     QString resultStr = sigResultBox->currentText();
@@ -121,7 +117,7 @@ void DPImanager::onAddSignature() {
     }
 }
 
-void DPImanager::onRemoveSignature() {
+void DPIManager::onRemoveSignature() {
     auto* item = sigList->currentItem();
     if (!item) {
         QMessageBox::warning(this, "Remove Signature", "Select a signature to remove.");
@@ -138,7 +134,7 @@ void DPImanager::onRemoveSignature() {
     }
 }
 
-void DPImanager::onTestDPI() {
+void DPIManager::onTestDPI() {
     QString input = testPayloadEdit->toPlainText().trimmed();
     if (input.isEmpty()) {
         testResultLabel->setText("Enter a payload to test.");

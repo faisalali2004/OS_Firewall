@@ -1,6 +1,5 @@
 #include "mainwindow.h"
 #include <QMessageBox>
-#include <QDebug>
 #include <QIcon>
 
 MainWindow::MainWindow(QWidget* parent)
@@ -10,7 +9,7 @@ MainWindow::MainWindow(QWidget* parent)
       logViewer(new LogViewer(this)),
       ruleEditor(new RuleEditor(this)),
       trafficShaperUI(new TrafficShaperUI(this)),
-      dpiManager(new DPImanager(this)),
+      dpiManager(new DPIManager(this)),
       navToolBar(new QToolBar("Navigation", this)),
       dashboardAction(new QAction(QIcon::fromTheme("view-dashboard"), "Dashboard", this)),
       logAction(new QAction(QIcon::fromTheme("document-open"), "Logs", this)),

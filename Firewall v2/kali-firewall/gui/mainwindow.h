@@ -43,7 +43,7 @@ private:
     LogViewer* logViewer;
     RuleEditor* ruleEditor;
     TrafficShaperUI* trafficShaperUI;
-    DPImanager* dpiManager;
+    DPIManager* dpiManager; // <-- Fixed class name
 
     QToolBar* navToolBar;
     QAction* dashboardAction;
