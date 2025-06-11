@@ -5,14 +5,17 @@
 #include <QToolBar>
 #include <QAction>
 #include <QToolButton>
-#include "dashboard.h"
-#include "log_viewer.h"
-#include "rule_editor.h"
-#include "traffic_shaper_ui.h"
-#include "dpi_manager.h"
-#include "rule_engine.h"
-#include "packet_capture.h"
-#include "dpi_engine.h"
+
+// Forward declarations to avoid circular includes
+class Dashboard;
+class LogViewer;
+class RuleEditor;
+class TrafficShaperUI;
+class DPImanager;
+class RuleEngine;
+class PacketCapture;
+class DPIEngine;
+struct PacketInfo;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
