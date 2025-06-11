@@ -11,6 +11,7 @@
 #include <QMessageBox>
 #include <QByteArray>
 #include <QTextEdit>
+#include <QRegularExpression>
 
 DPImanager::DPImanager(QWidget* parent)
     : QWidget(parent),
@@ -72,8 +73,8 @@ DPImanager::DPImanager(QWidget* parent)
 
 void DPImanager::refreshSignatureList() {
     sigList->clear();
-    for (const auto& name : dpiEngine->listSignatures()) {
-        sigList->addItem(QString::fromStdString(name));
+    for (const auto& info : dpiEngine->listSignatures()) {
+        sigList->addItem(QString::fromStdString(info.name));
     }
 }
 
@@ -97,9 +98,12 @@ void DPImanager::onAddSignature() {
     else if (resultStr == "SMTP") result = DPIResult::SMTP;
     else if (resultStr == "QUIC") result = DPIResult::QUIC;
 
-    dpiEngine->addSignature(name.toStdString(), regex.toStdString(), result, caseInsensitive);
-    refreshSignatureList();
-    QMessageBox::information(this, "Signature Added", "Signature added successfully.");
+    if (dpiEngine->addSignature(name.toStdString(), regex.toStdString(), result, caseInsensitive)) {
+        refreshSignatureList();
+        QMessageBox::information(this, "Signature Added", "Signature added successfully.");
+    } else {
+        QMessageBox::warning(this, "Duplicate Signature", "A signature with this name already exists.");
+    }
 }
 
 void DPImanager::onRemoveSignature() {
@@ -109,9 +113,12 @@ void DPImanager::onRemoveSignature() {
         return;
     }
     QString name = item->text();
-    dpiEngine->removeSignature(name.toStdString());
-    refreshSignatureList();
-    QMessageBox::information(this, "Signature Removed", "Signature removed successfully.");
+    if (dpiEngine->removeSignature(name.toStdString())) {
+        refreshSignatureList();
+        QMessageBox::information(this, "Signature Removed", "Signature removed successfully.");
+    } else {
+        QMessageBox::warning(this, "Remove Signature", "Signature not found.");
+    }
 }
 
 void DPImanager::onTestDPI() {
@@ -143,6 +150,9 @@ void DPImanager::onTestDPI() {
         case DPIResult::SMTP: resStr = "SMTP"; break;
         case DPIResult::QUIC: resStr = "QUIC"; break;
         case DPIResult::NONE: resStr = "NONE"; break;
+        case DPIResult::UNKNOWN: resStr = "UNKNOWN"; break;
+        case DPIResult::Allow: resStr = "Allow"; break;
+        case DPIResult::Block: resStr = "Block"; break;
         default: resStr = "UNKNOWN"; break;
     }
     testResultLabel->setText("Result: " + resStr + "\nMatched: " + QString::fromStdString(matched));
