@@ -89,6 +89,6 @@ bool DPIEngine::shouldBlock(const std::string& src_ip,
     std::string matchedSig;
     DPIResult result = inspect(payload, payload_len, matchedSig);
 
-    // Optionally, log or use matchedSig for more info
+    // Block if result is Block, or you can extend to block on other types if desired
     return result == DPIResult::Block;
 }

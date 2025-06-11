@@ -7,7 +7,16 @@
 
 enum class DPIResult {
     Allow,
-    Block
+    Block,
+    HTTP,
+    DNS,
+    TLS,
+    SSH,
+    FTP,
+    SMTP,
+    QUIC,
+    NONE,
+    UNKNOWN
 };
 
 class DPIEngine {
