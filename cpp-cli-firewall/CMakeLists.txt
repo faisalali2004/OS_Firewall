@@ -1,20 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(cpp-cli-firewall
-    VERSION 1.0
-    DESCRIPTION "Advanced C++ CLI Firewall"
-    LANGUAGES CXX
-)
+project(cpp-cli-firewall)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Warn if building in-source
-if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-    message(FATAL_ERROR "In-source builds are not allowed. Please use a separate build directory:\n"
-        "  mkdir build && cd build && cmake ..")
-endif()
 
 # Enable warnings
 if (MSVC)
@@ -26,16 +16,20 @@ endif()
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
-# Source files
-file(GLOB SOURCES
-    ${CMAKE_SOURCE_DIR}/src/*.cpp
-)
+# Gather all source files in src/
+file(GLOB SOURCES ${CMAKE_SOURCE_DIR}/src/*.cpp)
 
-# Executable
+# Create the executable
 add_executable(cpp-cli-firewall ${SOURCES})
 
-# Install target
-install(TARGETS cpp-cli-firewall DESTINATION bin)
+# Link with pcap (required for packet capture)
+find_package(PCAP REQUIRED)
+target_link_libraries(cpp-cli-firewall PRIVATE ${PCAP_LIBRARY})
 
-# Optionally, export compile_commands.json for tooling
+# For Linux, also link pthread if needed
+if(UNIX AND NOT APPLE)
+    target_link_libraries(cpp-cli-firewall PRIVATE pthread)
+endif()
+
+# Export compile commands for tooling
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

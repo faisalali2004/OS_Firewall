@@ -3,44 +3,57 @@
 
 #include <string>
 #include <vector>
-#include "rules.h"
+#include <mutex>
+#include <atomic>
+#include <memory>
+
+// Forward declarations
+class RuleManager;
+class Rule;
 
 class Firewall {
 public:
     Firewall();
     ~Firewall();
 
+    // Firewall control
     void start();
     void stop();
-    bool isRunningStatus() const;
+    bool isRunning() const;
 
     // Rule management
-    bool addRule(const Rule& rule);
-    bool removeRuleById(const std::string& ruleId);
-    bool removeRuleByIndex(size_t index);
-    bool enableRuleById(const std::string& ruleId);
-    bool disableRuleById(const std::string& ruleId);
-    bool enableRuleByIndex(size_t index);
-    bool disableRuleByIndex(size_t index);
-    bool editRule(const std::string& ruleId, const Rule& newRule);
-
-    // Query
+    void addRule(const Rule& rule);
+    void removeRule(const std::string& ruleId);
     void listRules() const;
-    const Rule* getRuleById(const std::string& ruleId) const;
-    void status() const;
-
-    // Persistence
-    bool saveRules() const;
-    bool loadRules();
+    void clearRules();
 
     // Logging
     void logEvent(const std::string& event) const;
+    void showLogs() const;
+
+    // Packet capture interface
+    void setCaptureInterface(const std::string& iface);
+    std::string getCaptureInterface() const;
+
+    // Persistence
+    void loadRules();
+    void saveRules() const;
+
+    // DPI and traffic shaping (stubs for extensibility)
+    void enableDPI(bool enable);
+    void enableTrafficShaping(bool enable);
 
 private:
-    std::vector<Rule> rules;
-    bool isRunning;
+    std::atomic<bool> running_;
+    std::string captureInterface_;
+    std::unique_ptr<RuleManager> ruleManager_;
+    mutable std::mutex ruleMutex_;
+    bool dpiEnabled_;
+    bool trafficShapingEnabled_;
 
-    int findRuleIndexById(const std::string& ruleId) const;
+    // Helper for internal state
+    void initialize();
+    void shutdown();
 };
 
 #endif // FIREWALL_H

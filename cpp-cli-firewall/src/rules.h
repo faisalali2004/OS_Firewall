@@ -8,6 +8,9 @@
 #include "logger.h"
 #include "packet_capture.h"
 
+// Forward declarations
+class RuleEngine;
+class TrafficShaper;
 
 class Rule {
 public:
@@ -31,9 +34,6 @@ private:
     bool enabled;
 };
 
-class RuleEngine;
-class TrafficShaper;
-
 class RuleManager {
 public:
     RuleManager();
@@ -47,6 +47,13 @@ public:
     void inspectPacket(const Packet& packet);
     void printPacketInfo(const Packet& pkt) const;
     void startPacketCapture(const std::string& iface);
+    void stopPacketCapture();
+    void clearRules();
+    void loadRules(const std::string& filename);
+    void saveRules(const std::string& filename) const;
+
+    // Access to rules for RuleEngine
+    const std::vector<Rule>& getRules() const { return rules; }
 
 private:
     std::vector<Rule> rules;

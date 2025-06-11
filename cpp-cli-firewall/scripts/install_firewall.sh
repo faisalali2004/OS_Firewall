@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install and manage the C++ CLI Firewall on Kali Linux
+# Advanced Install Script for C++ CLI Firewall
 
 set -e
 
@@ -22,7 +22,7 @@ install_package() {
 echo "[*] Updating package lists..."
 sudo apt-get update || { echo "[!] apt-get update failed. Exiting."; exit 1; }
 
-REQUIRED_PACKAGES=("g++" "cmake" "make")
+REQUIRED_PACKAGES=("g++" "cmake" "make" "libpcap-dev")
 for pkg in "${REQUIRED_PACKAGES[@]}"; do
     install_package "$pkg"
 done
@@ -42,46 +42,36 @@ fi
 
 cd "$BUILD_DIR" || { echo "[!] Failed to navigate to build directory"; exit 1; }
 
+echo "[*] Running CMake..."
 cmake .. || { echo "[!] CMake configuration failed. Exiting."; exit 1; }
+
+echo "[*] Building the firewall..."
 make || { echo "[!] Build failed. Exiting."; exit 1; }
 
 echo "[+] Firewall build completed successfully."
 
-# Function to start the firewall
-start_firewall() {
+# Prompt user for runtime options
+read -rp "Enter network interface to capture on (default: any): " iface
+iface=${iface:-any}
+
+read -rp "Enable DPI? (on/off, default: off): " dpi
+dpi=${dpi:-off}
+
+read -rp "Enable Traffic Shaping? (on/off, default: off): " shape
+shape=${shape:-off}
+
+# Start the firewall
+FIREWALL_BIN="./cpp-cli-firewall"
+if [ ! -f "$FIREWALL_BIN" ]; then
+    FIREWALL_BIN="./cli-firewall" # fallback for alternate binary name
+fi
+
+if [ -f "$FIREWALL_BIN" ]; then
     echo "[*] Starting firewall..."
-    if [ -f ./cpp-cli-firewall ]; then
-        ./cpp-cli-firewall start || { echo "[!] Failed to start firewall."; exit 1; }
-    else
-        echo "[!] Firewall binary not found. Build may have failed."
-        exit 1
-    fi
-}
+    "$FIREWALL_BIN" start --iface "$iface" --dpi "$dpi" --shape "$shape"
+else
+    echo "[!] Firewall binary not found. Build may have failed."
+    exit 1
+fi
 
-# Function to stop the firewall and clean up rules
-stop_firewall() {
-    echo "[*] Stopping firewall and cleaning up rules..."
-    if [ -f ./cpp-cli-firewall ]; then
-        ./cpp-cli-firewall stop || echo "[!] Firewall stop command failed."
-    fi
-    # Flush iptables rules (requires sudo)
-    if check_command iptables; then
-        sudo iptables -F
-        echo "[*] iptables rules flushed."
-    fi
-}
-
-# Ask user to start or stop firewall
-while true; do
-    echo "Choose an action:"
-    echo "  1) Start Firewall"
-    echo "  2) Stop Firewall and Flush Rules"
-    echo "  3) Exit"
-    read -rp "Enter choice [1-3]: " choice
-    case "$choice" in
-        1) start_firewall ;;
-        2) stop_firewall ;;
-        3) echo "Exiting installer."; exit 0 ;;
-        *) echo "Invalid choice." ;;
-    esac
-done
+echo "[+] Firewall started. Use './cpp-cli-firewall interactive' for interactive mode."

@@ -1,194 +1,165 @@
 #include "firewall.h"
 #include "rules.h"
-#include "utils.h"
-#include <iostream>
-#include <vector>
 #include <fstream>
+#include <iostream>
 #include <ctime>
+#include <iomanip>
 
-Firewall::Firewall() : isRunning(false) {
-    loadRules();
+Firewall::Firewall()
+    : running_(false),
+      captureInterface_("any"),
+      ruleManager_(std::make_unique<RuleManager>()),
+      dpiEnabled_(false),
+      trafficShapingEnabled_(false) {
+    initialize();
 }
 
 Firewall::~Firewall() {
+    shutdown();
+}
+
+void Firewall::initialize() {
+    loadRules();
+    logEvent("Firewall initialized.");
+}
+
+void Firewall::shutdown() {
+    stop();
     saveRules();
+    logEvent("Firewall shutdown.");
 }
 
 void Firewall::start() {
-    if (isRunning) {
+    if (running_) {
         std::cerr << "[!] Firewall is already running." << std::endl;
         return;
     }
-    isRunning = true;
+    running_ = true;
     logEvent("Firewall started.");
-    std::cout << "[+] Firewall started." << std::endl;
+    std::cout << "[+] Firewall started on interface: " << captureInterface_ << std::endl;
+
+    // Start packet capture and DPI if enabled
+    if (ruleManager_) {
+        ruleManager_->startPacketCapture(captureInterface_);
+    }
+    if (dpiEnabled_) {
+        std::cout << "[*] DPI enabled." << std::endl;
+        logEvent("DPI enabled.");
+    }
+    if (trafficShapingEnabled_) {
+        std::cout << "[*] Traffic shaping enabled." << std::endl;
+        logEvent("Traffic shaping enabled.");
+    }
 }
 
 void Firewall::stop() {
-    if (!isRunning) {
+    if (!running_) {
         std::cerr << "[!] Firewall is not running." << std::endl;
         return;
     }
-    isRunning = false;
+    running_ = false;
+    if (ruleManager_) {
+        ruleManager_->stopPacketCapture();
+    }
     logEvent("Firewall stopped.");
-    std::cout << "[-] Firewall stopped." << std::endl;
+    std::cout << "[+] Firewall stopped." << std::endl;
 }
 
-bool Firewall::isRunningStatus() const {
-    return isRunning;
+bool Firewall::isRunning() const {
+    return running_;
 }
 
-bool Firewall::addRule(const Rule& rule) {
-    rules.push_back(rule);
-    logEvent("Rule added: " + rule.getDescription());
-    std::cout << "[+] Rule added: " << rule.getDescription() << std::endl;
-    return saveRules();
-}
-
-bool Firewall::removeRuleById(const std::string& ruleId) {
-    int idx = findRuleIndexById(ruleId);
-    if (idx == -1) {
-        std::cerr << "[!] Rule not found: " << ruleId << std::endl;
-        return false;
+// Rule management
+void Firewall::addRule(const Rule& rule) {
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->addRule(rule);
+        logEvent("Rule added: " + rule.getDescription());
+        std::cout << "[+] Rule added: " << rule.getDescription() << std::endl;
     }
-    logEvent("Rule removed: " + rules[idx].getDescription());
-    rules.erase(rules.begin() + idx);
-    std::cout << "[-] Rule removed: " << ruleId << std::endl;
-    return saveRules();
 }
 
-bool Firewall::removeRuleByIndex(size_t index) {
-    if (index >= rules.size()) {
-        std::cerr << "[!] Invalid rule index." << std::endl;
-        return false;
+void Firewall::removeRule(const std::string& ruleId) {
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->removeRuleById(ruleId);
+        logEvent("Rule removed: ID " + ruleId);
+        std::cout << "[-] Rule removed: ID " << ruleId << std::endl;
     }
-    logEvent("Rule removed: " + rules[index].getDescription());
-    rules.erase(rules.begin() + index);
-    std::cout << "[-] Rule removed at index " << index << std::endl;
-    return saveRules();
-}
-
-bool Firewall::enableRuleById(const std::string& ruleId) {
-    int idx = findRuleIndexById(ruleId);
-    if (idx == -1) {
-        std::cerr << "[!] Rule not found: " << ruleId << std::endl;
-        return false;
-    }
-    rules[idx].setEnabled(true);
-    logEvent("Rule enabled: " + rules[idx].getDescription());
-    std::cout << "[+] Rule enabled: " << ruleId << std::endl;
-    return saveRules();
-}
-
-bool Firewall::disableRuleById(const std::string& ruleId) {
-    int idx = findRuleIndexById(ruleId);
-    if (idx == -1) {
-        std::cerr << "[!] Rule not found: " << ruleId << std::endl;
-        return false;
-    }
-    rules[idx].setEnabled(false);
-    logEvent("Rule disabled: " + rules[idx].getDescription());
-    std::cout << "[-] Rule disabled: " << ruleId << std::endl;
-    return saveRules();
-}
-
-bool Firewall::enableRuleByIndex(size_t index) {
-    if (index >= rules.size()) {
-        std::cerr << "[!] Invalid rule index." << std::endl;
-        return false;
-    }
-    rules[index].setEnabled(true);
-    logEvent("Rule enabled: " + rules[index].getDescription());
-    std::cout << "[+] Rule enabled at index " << index << std::endl;
-    return saveRules();
-}
-
-bool Firewall::disableRuleByIndex(size_t index) {
-    if (index >= rules.size()) {
-        std::cerr << "[!] Invalid rule index." << std::endl;
-        return false;
-    }
-    rules[index].setEnabled(false);
-    logEvent("Rule disabled: " + rules[index].getDescription());
-    std::cout << "[-] Rule disabled at index " << index << std::endl;
-    return saveRules();
-}
-
-bool Firewall::editRule(const std::string& ruleId, const Rule& newRule) {
-    int idx = findRuleIndexById(ruleId);
-    if (idx == -1) {
-        std::cerr << "[!] Rule not found: " << ruleId << std::endl;
-        return false;
-    }
-    rules[idx] = newRule;
-    logEvent("Rule edited: " + ruleId);
-    std::cout << "[*] Rule edited: " << ruleId << std::endl;
-    return saveRules();
 }
 
 void Firewall::listRules() const {
-    if (rules.empty()) {
-        std::cout << "No rules defined." << std::endl;
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->listRules();
+    }
+}
+
+void Firewall::clearRules() {
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->clearRules();
+        logEvent("All rules cleared.");
+        std::cout << "[*] All rules cleared." << std::endl;
+    }
+}
+
+// Logging
+void Firewall::logEvent(const std::string& event) const {
+    std::ofstream logFile("firewall.log", std::ios::app);
+    if (logFile) {
+        auto t = std::time(nullptr);
+        auto tm = *std::localtime(&t);
+        logFile << "[" << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") << "] " << event << std::endl;
+    }
+}
+
+void Firewall::showLogs() const {
+    std::ifstream logFile("firewall.log");
+    if (!logFile) {
+        std::cout << "[!] No log file found." << std::endl;
         return;
     }
-    std::cout << "Current firewall rules:" << std::endl;
-    for (size_t i = 0; i < rules.size(); ++i) {
-        std::cout << i << ": " << rules[i].getId() << " | " << rules[i].getDescription()
-                  << " | " << rules[i].getAction()
-                  << " [" << (rules[i].isEnabled() ? "ENABLED" : "DISABLED") << "]" << std::endl;
-    }
-}
-
-const Rule* Firewall::getRuleById(const std::string& ruleId) const {
-    for (const auto& rule : rules) {
-        if (rule.getId() == ruleId) return &rule;
-    }
-    return nullptr;
-}
-
-void Firewall::status() const {
-    std::cout << "Firewall status: " << (isRunning ? "RUNNING" : "STOPPED") << std::endl;
-    std::cout << "Number of rules: " << rules.size() << std::endl;
-}
-
-bool Firewall::saveRules() const {
-    std::ofstream outFile("rules.dat");
-    if (!outFile.is_open()) {
-        std::cerr << "[!] Failed to save rules." << std::endl;
-        return false;
-    }
-    for (const auto& rule : rules) {
-        outFile << rule.serialize() << std::endl;
-    }
-    outFile.close();
-    return true;
-}
-
-bool Firewall::loadRules() {
-    std::ifstream inFile("rules.dat");
-    if (!inFile.is_open()) {
-        std::cerr << "[!] No rules file found. Starting with empty rule set." << std::endl;
-        return false;
-    }
     std::string line;
-    rules.clear();
-    while (std::getline(inFile, line)) {
-        Rule rule;
-        if (rule.deserialize(line)) {
-            rules.push_back(rule);
-        }
+    while (std::getline(logFile, line)) {
+        std::cout << line << std::endl;
     }
-    inFile.close();
-    return true;
 }
 
-void Firewall::logEvent(const std::string& event) const {
-    logMessage(event, LogLevel::INFO);
+// Packet capture interface
+void Firewall::setCaptureInterface(const std::string& iface) {
+    captureInterface_ = iface;
+    logEvent("Capture interface set to: " + iface);
 }
 
-int Firewall::findRuleIndexById(const std::string& ruleId) const {
-    for (size_t i = 0; i < rules.size(); ++i) {
-        if (rules[i].getId() == ruleId) return static_cast<int>(i);
+std::string Firewall::getCaptureInterface() const {
+    return captureInterface_;
+}
+
+// Persistence
+void Firewall::loadRules() {
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->loadRules("rules.dat");
+        logEvent("Rules loaded from disk.");
     }
-    return -1;
+}
+
+void Firewall::saveRules() const {
+    std::lock_guard<std::mutex> lock(ruleMutex_);
+    if (ruleManager_) {
+        ruleManager_->saveRules("rules.dat");
+        logEvent("Rules saved to disk.");
+    }
+}
+
+// DPI and traffic shaping (stubs)
+void Firewall::enableDPI(bool enable) {
+    dpiEnabled_ = enable;
+    logEvent(std::string("DPI ") + (enable ? "enabled." : "disabled."));
+}
+
+void Firewall::enableTrafficShaping(bool enable) {
+    trafficShapingEnabled_ = enable;
+    logEvent(std::string("Traffic shaping ") + (enable ? "enabled." : "disabled."));
 }
