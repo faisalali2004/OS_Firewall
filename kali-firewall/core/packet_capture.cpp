@@ -1,5 +1,5 @@
 #include "packet_capture.h"
-#include "logger.h" // Make sure you have this header for logging
+#include "logger.h"
 #include <iostream>
 #include <cstring>
 #include <unistd.h>
@@ -17,7 +17,6 @@ namespace {
 constexpr size_t DEFAULT_BUF_SIZE = 0x10000; // 64KB
 }
 
-// Helper to get protocol name
 static std::string protoName(uint8_t proto) {
     switch (proto) {
         case IPPROTO_TCP: return "TCP";
@@ -28,7 +27,7 @@ static std::string protoName(uint8_t proto) {
 }
 
 PacketCapture::PacketCapture()
-    : nfqHandle(nullptr), queueHandle(nullptr), fd(-1), running(false) {}
+    : nfqHandle(nullptr), queueHandle(nullptr), fd(-1), running(false), ruleEngine(nullptr), dpiEngine(nullptr) {}
 
 PacketCapture::~PacketCapture() {
     stop();
@@ -127,10 +126,10 @@ void PacketCapture::stop() {
     fd = -1;
 }
 
-int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg* nfmsg, struct nfq_data* nfa, void* data) {
+int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, struct nfq_data* nfa, void* data) {
     PacketCapture* self = static_cast<PacketCapture*>(data);
     if (self && self->userHandler)
-        return self->userHandler(qh, nfmsg, nfa);
+        return self->userHandler(qh, nullptr, nfa);
 
     uint32_t id = 0;
     struct nfqnl_msg_packet_hdr* ph = nfq_get_msg_packet_hdr(nfa);
@@ -141,7 +140,7 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg* nf
 
     std::string src_ip, dst_ip, protocol, info;
     int src_port = 0, dst_port = 0;
-    std::string action = "allow"; // Change to "block" if you block
+    std::string action = "allow"; // Default to allow
 
     if (len > 0 && pktData) {
         struct iphdr* iph = (struct iphdr*)pktData;
@@ -163,10 +162,26 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg* nf
         }
     }
 
+    // --- RuleEngine and DPIEngine integration ---
+    bool shouldBlock = false;
+    if (self) {
+        if (self->ruleEngine && self->ruleEngine->shouldBlock(src_ip, dst_ip, src_port, dst_port, protocol)) {
+            shouldBlock = true;
+            info = "Blocked by RuleEngine";
+        }
+        // DPI check only if not already blocked
+        else if (self->dpiEngine && self->dpiEngine->shouldBlock(src_ip, dst_ip, src_port, dst_port, protocol, pktData, len)) {
+            shouldBlock = true;
+            info = "Blocked by DPIEngine";
+        }
+    }
+
+    action = shouldBlock ? "block" : "allow";
+
     // Print to terminal for debug
     std::cout << "[PACKET] " << src_ip << ":" << src_port << " -> "
               << dst_ip << ":" << dst_port << " proto: " << protocol
-              << " action: " << action << std::endl;
+              << " action: " << action << " info: " << info << std::endl;
 
     // Log to database (for LogViewer)
     std::time_t now = std::time(nullptr);
@@ -183,5 +198,9 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg* nf
         info
     );
 
-    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, nullptr);
+    if (shouldBlock) {
+        return nfq_set_verdict(qh, id, NF_DROP, 0, nullptr);
+    } else {
+        return nfq_set_verdict(qh, id, NF_ACCEPT, 0, nullptr);
+    }
 }
