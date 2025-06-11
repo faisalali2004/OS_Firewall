@@ -5,7 +5,7 @@
 #include <QPushButton>
 #include <QLabel>
 #include <vector>
-#include "logger.h"
+#include "logger.h" // This should provide the standalone LogEntry struct
 
 class LogViewer : public QWidget {
     Q_OBJECT
@@ -27,5 +27,5 @@ private:
 
     int currentPage;
     int pageSize;
-    std::vector<Logger::LogEntry> logs;
+    std::vector<LogEntry> logs; // Uses the standalone LogEntry struct
 };

@@ -6,6 +6,7 @@
 #include <QMessageBox>
 #include <QBrush>
 #include <QColor>
+#include <QFont>
 
 LogViewer::LogViewer(QWidget* parent)
     : QWidget(parent), currentPage(0), pageSize(50)
@@ -21,6 +22,7 @@ LogViewer::LogViewer(QWidget* parent)
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     table->setSortingEnabled(true);
+    table->setAlternatingRowColors(true);
 
     // Pagination controls
     auto* navLayout = new QHBoxLayout;
@@ -50,6 +52,7 @@ LogViewer::LogViewer(QWidget* parent)
 void LogViewer::refreshLogs() {
     logs = Logger::instance().getLogs(currentPage * pageSize, pageSize);
 
+    table->clearContents();
     table->setRowCount(static_cast<int>(logs.size()));
 
     for (int row = 0; row < static_cast<int>(logs.size()); ++row) {
@@ -65,8 +68,12 @@ void LogViewer::refreshLogs() {
 
         // Highlight recent entries (first page only)
         if (currentPage == 0 && row < 5) {
+            QBrush highlight(QColor(230, 255, 230));
+            QFont boldFont;
+            boldFont.setBold(true);
             for (int col = 0; col < 8; ++col) {
-                table->item(row, col)->setBackground(QBrush(QColor(230, 255, 230)));
+                table->item(row, col)->setBackground(highlight);
+                table->item(row, col)->setFont(boldFont);
             }
         }
     }
@@ -78,8 +85,13 @@ void LogViewer::refreshLogs() {
             table->setItem(0, col, new QTableWidgetItem("—"));
         }
         table->setSpan(0, 0, 1, 8);
-        table->item(0, 0)->setText("No logs to display.");
-        table->item(0, 0)->setTextAlignment(Qt::AlignCenter);
+        QTableWidgetItem* placeholder = table->item(0, 0);
+        placeholder->setText("No logs to display.");
+        placeholder->setTextAlignment(Qt::AlignCenter);
+        QFont italicFont;
+        italicFont.setItalic(true);
+        placeholder->setFont(italicFont);
+        placeholder->setForeground(QBrush(QColor(120, 120, 120)));
     }
 
     pageLabel->setText(QString("Page %1").arg(currentPage + 1));
