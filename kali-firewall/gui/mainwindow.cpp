@@ -16,7 +16,7 @@
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
       stackedWidget(new QStackedWidget(this)),
-      dashboard(new Dashboard(this)),
+      dashboard(new Dashboard(&Logger::instance(), this)),
       logViewer(new LogViewer(this)),
       ruleEditor(new RuleEditor(this)),
       trafficShaperUI(new TrafficShaperUI(this)),

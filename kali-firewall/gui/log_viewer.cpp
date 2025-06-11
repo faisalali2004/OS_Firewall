@@ -57,7 +57,7 @@ void LogViewer::refreshLogs() {
 
     for (int row = 0; row < static_cast<int>(logs.size()); ++row) {
         const auto& entry = logs[row];
-        table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(entry.time)));
+        table->setItem(row, 0, new QTableWidgetItem(QString::fromStdString(entry.timestamp)));
         table->setItem(row, 1, new QTableWidgetItem(QString::fromStdString(entry.src_ip)));
         table->setItem(row, 2, new QTableWidgetItem(QString::number(entry.src_port)));
         table->setItem(row, 3, new QTableWidgetItem(QString::fromStdString(entry.dst_ip)));
