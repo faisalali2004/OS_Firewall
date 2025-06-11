@@ -4,6 +4,10 @@
 #include <string>
 #include <vector>
 #include "packet.h"
+#include "dpi_engine.h"
+#include "logger.h"
+#include "packet_capture.h"
+
 
 class Rule {
 public:
@@ -27,9 +31,6 @@ private:
     bool enabled;
 };
 
-class DPIEngine;
-class Logger;
-class PacketCapture;
 class RuleEngine;
 class TrafficShaper;
 
