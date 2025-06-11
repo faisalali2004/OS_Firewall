@@ -1,10 +1,23 @@
 #pragma once
+
 #include <string>
 #include <vector>
 #include <regex>
 #include <mutex>
 
-enum class DPIResult { Allow, Block };
+enum class DPIResult {
+    Allow,
+    Block,
+    UNKNOWN,
+    HTTP,
+    DNS,
+    TLS,
+    SSH,
+    FTP,
+    SMTP,
+    QUIC,
+    NONE
+};
 
 class DPIEngine {
 public:
@@ -26,6 +39,9 @@ public:
     std::vector<SignatureInfo> listSignatures();
     // Test payload, returns result and optionally matched signature name
     DPIResult testPayload(const std::string& payload, std::string* matchedSig = nullptr);
+
+    // Inspect raw data buffer (for GUI integration)
+    DPIResult inspect(const uint8_t* data, size_t len, std::string& matchedSig);
 
     static std::regex make_regex(const std::string& pattern, bool case_insensitive = false);
 

@@ -9,6 +9,8 @@
 #include <arpa/inet.h>
 #include <set>
 #include <algorithm>
+#include <map>
+#include <set>
 
 // Convert hex IP to dotted-decimal (IPv4)
 static std::string hexToIp(const std::string& hex) {

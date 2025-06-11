@@ -14,7 +14,7 @@ std::regex DPIEngine::make_regex(const std::string& pattern, bool case_insensiti
     } catch (const std::regex_error& e) {
         std::cerr << "[DPIEngine] Invalid regex pattern: " << pattern << " (" << e.what() << ")" << std::endl;
         // Fallback: match nothing
-        return std::regex("$a"); 
+        return std::regex("$a");
     }
 }
 
@@ -29,7 +29,6 @@ bool DPIEngine::addSignature(const std::string& name, const std::string& regex_s
     }
     Signature sig{name, make_regex(regex_str, case_insensitive), result, regex_str, case_insensitive};
     signatures.push_back(sig);
-    // Optionally: log signature addition here
     return true;
 }
 
@@ -41,7 +40,6 @@ bool DPIEngine::removeSignature(const std::string& name) {
             [&](const Signature& sig) { return sig.name == name; }),
         signatures.end()
     );
-    // Optionally: log signature removal here
     return signatures.size() < old_size;
 }
 
@@ -69,4 +67,9 @@ DPIResult DPIEngine::testPayload(const std::string& payload, std::string* matche
     }
     if (matchedSig) *matchedSig = "";
     return DPIResult::Allow;
+}
+
+DPIResult DPIEngine::inspect(const uint8_t* data, size_t len, std::string& matchedSig) {
+    std::string payload(reinterpret_cast<const char*>(data), len);
+    return testPayload(payload, &matchedSig);
 }

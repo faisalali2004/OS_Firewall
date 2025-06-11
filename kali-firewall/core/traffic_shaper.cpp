@@ -1,4 +1,5 @@
 #include "traffic_shaper.h"
+#include <unistd.h>
 #include <QProcess>
 #include <QDebug>
 #include <QFile>
