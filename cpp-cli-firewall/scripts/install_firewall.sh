@@ -29,19 +29,20 @@ done
 
 echo "[*] All required packages are installed."
 
-# Create build directory
+# Determine the script's directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_ROOT" || { echo "[!] Failed to navigate to project root."; exit 1; }
+
 BUILD_DIR="build"
 if [ ! -d "$BUILD_DIR" ]; then
     mkdir "$BUILD_DIR"
 fi
 
-# Navigate to build directory
 cd "$BUILD_DIR" || { echo "[!] Failed to navigate to build directory"; exit 1; }
 
-# Run CMake to configure the project
 cmake .. || { echo "[!] CMake configuration failed. Exiting."; exit 1; }
-
-# Build the project
 make || { echo "[!] Build failed. Exiting."; exit 1; }
 
 echo "[+] Firewall build completed successfully."
@@ -49,14 +50,21 @@ echo "[+] Firewall build completed successfully."
 # Function to start the firewall
 start_firewall() {
     echo "[*] Starting firewall..."
-    ./cpp-cli-firewall start || { echo "[!] Failed to start firewall."; exit 1; }
+    if [ -f ./cpp-cli-firewall ]; then
+        ./cpp-cli-firewall start || { echo "[!] Failed to start firewall."; exit 1; }
+    else
+        echo "[!] Firewall binary not found. Build may have failed."
+        exit 1
+    fi
 }
 
 # Function to stop the firewall and clean up rules
 stop_firewall() {
     echo "[*] Stopping firewall and cleaning up rules..."
-    ./cpp-cli-firewall stop || echo "[!] Firewall stop command failed."
-    # Example: Flush iptables rules (requires sudo)
+    if [ -f ./cpp-cli-firewall ]; then
+        ./cpp-cli-firewall stop || echo "[!] Firewall stop command failed."
+    fi
+    # Flush iptables rules (requires sudo)
     if check_command iptables; then
         sudo iptables -F
         echo "[*] iptables rules flushed."
