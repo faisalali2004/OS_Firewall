@@ -15,10 +15,9 @@
 
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent),
-      logger(new Logger()),
       stackedWidget(new QStackedWidget(this)),
-      dashboard(new Dashboard(logger, this)),
-      logViewer(new LogViewer(logger, this)),
+      dashboard(new Dashboard(this)),
+      logViewer(new LogViewer(this)),
       ruleEditor(new RuleEditor(this)),
       trafficShaperUI(new TrafficShaperUI(this)),
       dpiManager(new DPImanager(this)),
@@ -35,7 +34,7 @@ MainWindow::MainWindow(QWidget* parent)
     setMinimumSize(900, 600);
 
     // --- Logger DB Initialization ---
-    if (!logger->initDB("../logs/firewall_log.db")) {
+    if (!Logger::instance().initDB("../logs/firewall_log.db")) {
         QMessageBox::critical(this, "Logger Error", "Failed to initialize log database. Logging will be disabled.");
     }
 
@@ -67,9 +66,7 @@ MainWindow::MainWindow(QWidget* parent)
     showDashboard();
 }
 
-MainWindow::~MainWindow() {
-    delete logger;
-}
+MainWindow::~MainWindow() {}
 
 void MainWindow::setupNavigation() {
     navToolBar->addAction(dashboardAction);
