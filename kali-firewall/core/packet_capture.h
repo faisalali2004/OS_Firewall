@@ -1,13 +1,14 @@
 #pragma once
 
+#include <QObject>
 #include <thread>
 #include <mutex>
 #include <atomic>
 #include <vector>
 #include <libnetfilter_queue/libnetfilter_queue.h>
-#include "rule_engine.h"
-#include "dpi_engine.h"
-#include <QObject>
+
+class RuleEngine;
+class DPIEngine;
 
 class PacketCapture : public QObject {
     Q_OBJECT
@@ -15,7 +16,7 @@ public:
     PacketCapture();
     ~PacketCapture();
 
-    bool init(uint16_t queue_num = 0, size_t buf_size = 4096);
+    bool init(uint16_t queue_num = 0, size_t buf_size = 0x10000);
     void start();
     void stop();
 
@@ -34,13 +35,13 @@ private:
     size_t bufferSize;
     std::thread captureThread;
     std::mutex mtx;
-    std::atomic<bool> running{false};
+    std::atomic<bool> running;
 
-    RuleEngine* ruleEngine = nullptr;
-    DPIEngine* dpiEngine = nullptr;
+    RuleEngine* ruleEngine;
+    DPIEngine* dpiEngine;
 
-    std::atomic<int> totalPackets{0};
-    std::atomic<int> blockedPackets{0};
+    std::atomic<int> totalPackets;
+    std::atomic<int> blockedPackets;
 
     void captureLoop();
     int getCurrentMemoryUsageKB();

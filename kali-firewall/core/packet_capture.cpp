@@ -27,12 +27,6 @@ static std::string protoName(uint8_t proto) {
     }
 }
 
-static int getCurrentMemoryUsageKB() {
-    struct rusage usage;
-    getrusage(RUSAGE_SELF, &usage);
-    return usage.ru_maxrss;
-}
-
 PacketCapture::PacketCapture()
     : nfqHandle(nullptr), queueHandle(nullptr), fd(-1), running(false), ruleEngine(nullptr), dpiEngine(nullptr),
       totalPackets(0), blockedPackets(0) {}
@@ -41,7 +35,7 @@ PacketCapture::~PacketCapture() {
     stop();
 }
 
-bool PacketCapture::init(uint16_t queue_num, PacketHandler handler, size_t buf_size) {
+bool PacketCapture::init(uint16_t queue_num, size_t buf_size) {
     std::lock_guard<std::mutex> lock(mtx);
 
     if (running) {
@@ -69,7 +63,6 @@ bool PacketCapture::init(uint16_t queue_num, PacketHandler handler, size_t buf_s
         return false;
     }
 
-    userHandler = handler;
     queueHandle = nfq_create_queue(nfqHandle, queue_num, &PacketCapture::internalCallback, this);
     if (!queueHandle) {
         std::cerr << "[PacketCapture] nfq_create_queue() failed\n";
@@ -134,10 +127,14 @@ void PacketCapture::stop() {
     fd = -1;
 }
 
+int PacketCapture::getCurrentMemoryUsageKB() {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    return usage.ru_maxrss;
+}
+
 int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, struct nfq_data* nfa, void* data) {
     PacketCapture* self = static_cast<PacketCapture*>(data);
-    if (self && self->userHandler)
-        return self->userHandler(qh, nullptr, nfa, data); // Pass all 4 arguments
 
     uint32_t id = 0;
     struct nfqnl_msg_packet_hdr* ph = nfq_get_msg_packet_hdr(nfa);
@@ -210,7 +207,7 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, s
     if (self) {
         self->totalPackets++;
         if (shouldBlock) self->blockedPackets++;
-        emit self->statsUpdated(self->totalPackets, self->blockedPackets, getCurrentMemoryUsageKB());
+        emit self->statsUpdated(self->totalPackets, self->blockedPackets, self->getCurrentMemoryUsageKB());
     }
 
     if (shouldBlock) {
