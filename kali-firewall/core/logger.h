@@ -20,6 +20,9 @@ public:
     Logger();
     ~Logger();
 
+    // Singleton instance accessor
+    static Logger& instance();
+
     bool initDB(const std::string& db_path);
     void logEvent(const std::string& timestamp, const std::string& src_ip, int src_port,
                   const std::string& dst_ip, int dst_port, const std::string& protocol,
