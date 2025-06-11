@@ -4,22 +4,17 @@
 #include <QGroupBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QTimer>
-#include <QLabel>
-#include <QProgressBar>
-#include <QPushButton>
 #include <QFile>
 #include <QTextStream>
-#include <QProcess>
 #include <QDebug>
 
-// Optional: Pass a Logger* to the Dashboard constructor for integration
 Dashboard::Dashboard(Logger* logger, QWidget* parent)
     : QWidget(parent),
       logger(logger),
       statusLabel(new QLabel("Firewall Status: <b>Active</b>", this)),
       trafficLabel(new QLabel("Traffic: 0 packets", this)),
       blockedLabel(new QLabel("Blocked: 0 packets", this)),
+      memoryLabel(new QLabel("Memory Usage: 0 KB", this)),
       cpuBar(new QProgressBar(this)),
       memBar(new QProgressBar(this)),
       statsTimer(new QTimer(this)),
@@ -36,7 +31,7 @@ Dashboard::Dashboard(Logger* logger, QWidget* parent)
     connect(shaperBtn, &QPushButton::clicked, this, &Dashboard::openTrafficShaper);
     connect(dpiBtn, &QPushButton::clicked, this, &Dashboard::openDPIManager);
 
-    statsTimer->start(2000); // Update stats every 2 seconds
+    statsTimer->start(2000); // Update system stats every 2 seconds
     updateStats();
 }
 
@@ -46,7 +41,7 @@ void Dashboard::setupUI() {
     cpuBar->setRange(0, 100);
     memBar->setRange(0, 100);
     cpuBar->setFormat("CPU Usage: %p%");
-    memBar->setFormat("Memory Usage: %p%");
+    memBar->setFormat("System Memory: %p%");
 
     auto* statsBox = new QGroupBox("System Stats", this);
     auto* statsLayout = new QVBoxLayout;
@@ -54,10 +49,11 @@ void Dashboard::setupUI() {
     statsLayout->addWidget(memBar);
     statsBox->setLayout(statsLayout);
 
-    auto* trafficBox = new QGroupBox("Traffic Overview", this);
+    auto* trafficBox = new QGroupBox("Firewall Stats", this);
     auto* trafficLayout = new QVBoxLayout;
     trafficLayout->addWidget(trafficLabel);
     trafficLayout->addWidget(blockedLabel);
+    trafficLayout->addWidget(memoryLabel);
     trafficBox->setLayout(trafficLayout);
 
     auto* btnLayout = new QHBoxLayout;
@@ -76,38 +72,31 @@ void Dashboard::setupUI() {
     setMinimumWidth(400);
 }
 
+// --- Real-time stats from PacketCapture/MainWindow ---
+void Dashboard::setStats(int total, int blocked, int memoryKB) {
+    trafficLabel->setText(QString("Traffic: %1 packets").arg(total));
+    blockedLabel->setText(QString("Blocked: %1 packets").arg(blocked));
+    memoryLabel->setText(QString("Memory Usage: %1 KB").arg(memoryKB));
+
+    // Status logic based on real-time stats
+    if (blocked > 0 && blocked > total / 2) {
+        statusLabel->setText("Firewall Status: <b style='color:orange;'>Blocking Heavily</b>");
+    } else {
+        statusLabel->setText("Firewall Status: <b>Active</b>");
+    }
+}
+
+// --- System stats (CPU/memory) for info only ---
 void Dashboard::updateStats() {
-    // --- CPU and Memory Usage ---
     int cpu = getCpuUsage();
     int mem = getMemUsage();
 
     cpuBar->setValue(cpu);
     memBar->setValue(mem);
 
-    // --- Traffic and Blocked Stats ---
-    int traffic = 0, blocked = 0;
-    if (logger) {
-        auto logs = logger->getLogs(1000, 0); // last 1000 events
-        traffic = logs.size();
-        blocked = std::count_if(logs.begin(), logs.end(), [](const LogEntry& e) {
-            return e.action == "block";
-        });
-    } else {
-        // Fallback: demo values
-        traffic = QRandomGenerator::global()->bounded(10000);
-        blocked = QRandomGenerator::global()->bounded(1000);
-    }
-
-    trafficLabel->setText(QString("Traffic: %1 packets").arg(traffic));
-    blockedLabel->setText(QString("Blocked: %1 packets").arg(blocked));
-
-    // --- Status ---
+    // Optionally, you can also update statusLabel here for system load
     if (cpu > 90 || mem > 90) {
         statusLabel->setText("Firewall Status: <b style='color:red;'>High Load</b>");
-    } else if (blocked > 0 && blocked > traffic / 2) {
-        statusLabel->setText("Firewall Status: <b style='color:orange;'>Blocking Heavily</b>");
-    } else {
-        statusLabel->setText("Firewall Status: <b>Active</b>");
     }
 }
 
@@ -143,7 +132,7 @@ int Dashboard::getCpuUsage() {
 #endif
 }
 
-// --- Cross-platform Memory usage (Linux) ---
+// --- Cross-platform Memory usage (Linux, system-wide) ---
 int Dashboard::getMemUsage() {
 #ifdef Q_OS_LINUX
     QFile file("/proc/meminfo");

@@ -2,24 +2,28 @@
 
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <vector>
 #include <libnetfilter_queue/libnetfilter_queue.h>
 #include "rule_engine.h"
 #include "dpi_engine.h"
+#include <QObject>
 
-using PacketHandler = int(*)(struct nfq_q_handle*, struct nfgenmsg*, struct nfq_data*, void*);
-
-class PacketCapture {
+class PacketCapture : public QObject {
+    Q_OBJECT
 public:
     PacketCapture();
     ~PacketCapture();
 
-    bool init(uint16_t queue_num = 0, PacketHandler handler = nullptr, size_t buf_size = 0);
+    bool init(uint16_t queue_num = 0, size_t buf_size = 4096);
     void start();
     void stop();
 
     void setRuleEngine(RuleEngine* re) { ruleEngine = re; }
     void setDPIEngine(DPIEngine* de) { dpiEngine = de; }
+
+signals:
+    void statsUpdated(int totalPackets, int blockedPackets, int memoryUsageKB);
 
 private:
     static int internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, struct nfq_data* nfa, void* data);
@@ -30,11 +34,14 @@ private:
     size_t bufferSize;
     std::thread captureThread;
     std::mutex mtx;
-    bool running;
+    std::atomic<bool> running{false};
 
-    PacketHandler userHandler;
+    RuleEngine* ruleEngine = nullptr;
+    DPIEngine* dpiEngine = nullptr;
 
-    // Integration with RuleEngine and DPIEngine
-    RuleEngine* ruleEngine;
-    DPIEngine* dpiEngine;
+    std::atomic<int> totalPackets{0};
+    std::atomic<int> blockedPackets{0};
+
+    void captureLoop();
+    int getCurrentMemoryUsageKB();
 };

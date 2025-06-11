@@ -1,45 +1,58 @@
 #pragma once
 
-#include <QWidget>
-#include <QLabel>
-#include <QProgressBar>
-#include <QPushButton>
-#include <QTimer>
+#include <QMainWindow>
+#include <QStackedWidget>
+#include <QToolBar>
+#include <QAction>
+#include <QToolButton>
+#include "dashboard.h"
+#include "log_viewer.h"
+#include "rule_editor.h"
+#include "traffic_shaper_ui.h"
+#include "dpi_manager.h"
+#include "rule_engine.h"
+#include "packet_capture.h"
+#include "dpi_engine.h"
 
-class Logger;
-
-/**
- * @brief Dashboard widget showing firewall status, system stats, and navigation.
- */
-class Dashboard : public QWidget {
+class MainWindow : public QMainWindow {
     Q_OBJECT
-public:
-    explicit Dashboard(Logger* logger = nullptr, QWidget* parent = nullptr);
-    ~Dashboard();
 
-signals:
-    void openLogViewer();
-    void openRuleEditor();
-    void openTrafficShaper();
-    void openDPIManager();
+public:
+    explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow();
 
 private slots:
-    void updateStats();
+    void showDashboard();
+    void showLogViewer();
+    void showRuleEditor();
+    void showTrafficShaper();
+    void showDPIManager();
+
+    void onUserDecisionNeeded(const PacketInfo& pkt);
+    void onInteractiveModeToggled(bool checked);
+
+    void updateStatsDisplay(int total, int blocked, int memoryKB);
 
 private:
-    void setupUI();
-    int getCpuUsage();
-    int getMemUsage();
+    void setupNavigation();
+    void setupConnections();
 
-    Logger* logger;
-    QLabel* statusLabel;
-    QLabel* trafficLabel;
-    QLabel* blockedLabel;
-    QProgressBar* cpuBar;
-    QProgressBar* memBar;
-    QTimer* statsTimer;
-    QPushButton* logBtn;
-    QPushButton* ruleBtn;
-    QPushButton* shaperBtn;
-    QPushButton* dpiBtn;
+    QStackedWidget* stackedWidget;
+    Dashboard* dashboard;
+    LogViewer* logViewer;
+    RuleEditor* ruleEditor;
+    TrafficShaperUI* trafficShaperUI;
+    DPImanager* dpiManager;
+
+    QToolBar* navToolBar;
+    QAction* dashboardAction;
+    QAction* logAction;
+    QAction* ruleAction;
+    QAction* shaperAction;
+    QAction* dpiAction;
+    QToolButton* interactiveModeButton;
+
+    RuleEngine* ruleEngine;
+    PacketCapture* packetCapture;
+    DPIEngine* dpiEngine;
 };

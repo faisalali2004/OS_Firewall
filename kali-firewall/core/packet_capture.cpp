@@ -12,6 +12,7 @@
 #include <netinet/udp.h>
 #include <ctime>
 #include <linux/netfilter.h> // For NF_DROP, NF_ACCEPT
+#include <sys/resource.h>    // For getrusage
 
 namespace {
 constexpr size_t DEFAULT_BUF_SIZE = 0x10000; // 64KB
@@ -26,8 +27,15 @@ static std::string protoName(uint8_t proto) {
     }
 }
 
+static int getCurrentMemoryUsageKB() {
+    struct rusage usage;
+    getrusage(RUSAGE_SELF, &usage);
+    return usage.ru_maxrss;
+}
+
 PacketCapture::PacketCapture()
-    : nfqHandle(nullptr), queueHandle(nullptr), fd(-1), running(false), ruleEngine(nullptr), dpiEngine(nullptr) {}
+    : nfqHandle(nullptr), queueHandle(nullptr), fd(-1), running(false), ruleEngine(nullptr), dpiEngine(nullptr),
+      totalPackets(0), blockedPackets(0) {}
 
 PacketCapture::~PacketCapture() {
     stop();
@@ -197,6 +205,13 @@ int PacketCapture::internalCallback(struct nfq_q_handle* qh, struct nfgenmsg*, s
         action,
         info
     );
+
+    // --- Memory and stats update ---
+    if (self) {
+        self->totalPackets++;
+        if (shouldBlock) self->blockedPackets++;
+        emit self->statsUpdated(self->totalPackets, self->blockedPackets, getCurrentMemoryUsageKB());
+    }
 
     if (shouldBlock) {
         return nfq_set_verdict(qh, id, NF_DROP, 0, nullptr);

@@ -5,6 +5,7 @@
 #include "traffic_shaper_ui.h"
 #include "dpi_manager.h"
 #include "logger.h"
+#include "packet_capture.h"
 #include <QMessageBox>
 #include <QDebug>
 #include <QStackedWidget>
@@ -28,7 +29,9 @@ MainWindow::MainWindow(QWidget* parent)
       shaperAction(new QAction(QIcon::fromTheme("network-wired"), "Traffic Shaper", this)),
       dpiAction(new QAction(QIcon::fromTheme("security-high"), "DPI Manager", this)),
       interactiveModeButton(new QToolButton(this)),
-      ruleEngine(new RuleEngine(this, "../config/default_rules.json"))
+      ruleEngine(new RuleEngine(this, "../config/default_rules.json")),
+      packetCapture(new PacketCapture),
+      dpiEngine(new DPIEngine)
 {
     setWindowTitle("Kali Firewall");
     setMinimumSize(900, 600);
@@ -63,10 +66,30 @@ MainWindow::MainWindow(QWidget* parent)
     connect(interactiveModeButton, &QToolButton::toggled,
             this, &MainWindow::onInteractiveModeToggled);
 
+    // --- PACKET CAPTURE & DPI INTEGRATION ---
+    packetCapture->setRuleEngine(ruleEngine);
+    packetCapture->setDPIEngine(dpiEngine);
+
+    // Connect stats signal to dashboard update
+    connect(packetCapture, &PacketCapture::statsUpdated,
+            this, &MainWindow::updateStatsDisplay);
+
+    // Start packet capture (queue 0, adjust if needed)
+    packetCapture->init(0);
+    packetCapture->start();
+
+    // Initialize dashboard stats
+    updateStatsDisplay(0, 0, 0);
+
     showDashboard();
 }
 
-MainWindow::~MainWindow() {}
+MainWindow::~MainWindow() {
+    packetCapture->stop();
+    delete packetCapture;
+    delete dpiEngine;
+    delete ui;
+}
 
 void MainWindow::setupNavigation() {
     navToolBar->addAction(dashboardAction);
@@ -145,4 +168,15 @@ void MainWindow::onInteractiveModeToggled(bool checked) {
                               : "Interactive mode disabled.\nUnknown connections will be blocked by default.";
         QMessageBox::information(this, "Interactive Mode", msg);
     }
+}
+
+// --- DASHBOARD STATS UPDATE SLOT ---
+void MainWindow::updateStatsDisplay(int total, int blocked, int memoryKB) {
+    // If your Dashboard widget has setStats, use:
+    dashboard->setStats(total, blocked, memoryKB);
+
+    // If not, and you have direct access to labels:
+    // dashboard->ui->labelTotalPackets->setText(QString::number(total));
+    // dashboard->ui->labelBlockedPackets->setText(QString::number(blocked));
+    // dashboard->ui->labelMemoryUsage->setText(QString("%1 KB").arg(memoryKB));
 }

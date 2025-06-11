@@ -11,9 +11,12 @@
 #include "traffic_shaper_ui.h"
 #include "dpi_manager.h"
 #include "rule_engine.h"
+#include "packet_capture.h"
+#include "dpi_engine.h"
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
+
 public:
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow();
@@ -27,6 +30,8 @@ private slots:
 
     void onUserDecisionNeeded(const PacketInfo& pkt);
     void onInteractiveModeToggled(bool checked);
+
+    void updateStatsDisplay(int total, int blocked, int memoryKB);
 
 private:
     void setupNavigation();
@@ -48,4 +53,6 @@ private:
     QToolButton* interactiveModeButton;
 
     RuleEngine* ruleEngine;
+    PacketCapture* packetCapture;
+    DPIEngine* dpiEngine;
 };
